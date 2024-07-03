@@ -3,8 +3,5 @@ name = "cibo_online"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-
 [dependencies]
-monos_gfx = { git = "https://github.com/Fisch03/monOS" }
-
+monos_gfx = { git = "https://github.com/Fisch03/monOS", features = [ "lib_only" ] }

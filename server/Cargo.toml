@@ -1,0 +1,9 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7.5"
+tower-http = { version = "0.5", features = ["fs", "compression-gzip", "compression-br", "compression-deflate", "compression-zstd"] }
+tokio = { version = "1", features = ["full"] }
