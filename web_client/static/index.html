@@ -2,48 +2,66 @@
 
 <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000000;
+        }
+
+        #CanvasWrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #GameCanvas {
+            image-rendering: pixelated;
+        }
+    </style>
 </head>
 
 <body>
-    <!-- Note the usage of `type=module` here as this is an ES6 module -->
-    <script type="module">
-        // Use ES module import syntax to import functionality from the module
-        // that we have compiled.
-        //
-        // Note that the `default` import is an initialization function which
-        // will "boot" the module and make it ready to use. Currently browsers
-        // don't support natively imported WebAssembly as an ES module, but
-        // eventually the manual initialization won't be required!
-        import init from './web_client.js';
+    <div id="CanvasWrapper"><canvas id="GameCanvas"></canvas></div>
 
-        async function run() {
-            // First up we need to actually load the wasm file, so we use the
-            // default export to inform it where the wasm file is located on the
-            // server, and then we wait on the returned promise to wait for the
-            // wasm to be loaded.
-            //
-            // It may look like this: `await init('./pkg/without_a_bundler_bg.wasm');`,
-            // but there is also a handy default inside `init` function, which uses
-            // `import.meta` to locate the wasm file relatively to js file.
-            //
-            // Note that instead of a string you can also pass in any of the
-            // following things:
-            //
-            // * `WebAssembly.Module`
-            //
-            // * `ArrayBuffer`
-            //
-            // * `Response`
-            //
-            // * `Promise` which returns any of the above, e.g. `fetch("./path/to/wasm")`
-            //
-            // This gives you complete control over how the module is loaded
-            // and compiled.
-            //
-            // Also note that the promise, when resolved, yields the wasm module's
-            // exports which is the same as importing the `*_bg` module in other
-            // modes
-            await init();
+    <script type="module">
+        import init, {Game} from './web_client.js';
+
+        async function run() {  
+            let mod = await init();
+            
+            let game = Game.new();
+
+            const canvas = document.getElementById('GameCanvas');
+            const wrapper = document.getElementById('CanvasWrapper');
+            canvas.width = game.width();
+            canvas.height = game.height();
+
+            console.log(window.innerWidth, window.innerHeight, game.width(), game.height());
+            const biggest_scale_y = Math.floor(window.innerHeight / game.height());
+            const biggest_scale_x = Math.floor(window.innerWidth / game.width());
+            console.log(biggest_scale_x, biggest_scale_y);
+            const scale = Math.max(Math.min(biggest_scale_x, biggest_scale_y), 1);
+            if (scale >= 1) {
+                wrapper.style.width = `${game.width() * scale}px`;
+                wrapper.style.height = `${game.height() * scale}px`;
+            }
+
+
+            const ctx = canvas.getContext('2d', { alpha: false });
+            const canvas_data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const framebuffer = new Uint8Array(mod.memory.buffer, game.get_framebuffer(), game.width() * game.height() * 4);
+
+            function render() {
+                canvas_data.data.set(framebuffer);
+                ctx.putImageData(canvas_data, 0, 0);
+            }
+
+            render();
+            
         }
 
         run();

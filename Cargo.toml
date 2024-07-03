@@ -1,7 +1,12 @@
 [package]
 name = "cibo_online-runner"
 version = "0.1.0"
+edition = "2021"
 
 [workspace]
 resolver = "2"
 members = ["web_client", "server", "cibo_online"]
+
+
+[profile.release.package.web_client]
+opt-level = "s"
