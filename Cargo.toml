@@ -1,0 +1,3 @@
+[workspace]
+resolver = "2"
+members = ["cibo_online", "cibo_online-web"]
