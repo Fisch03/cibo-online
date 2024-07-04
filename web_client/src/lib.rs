@@ -1,10 +1,15 @@
-use std::ptr::addr_of_mut;
+use std::{cell::RefCell, ptr::addr_of_mut, rc::Rc};
 
+use cibo_online::{
+    client::{ClientGameState, ClientMessage},
+    server::ServerMessage,
+};
+use monos_gfx::{fonts, Color, Framebuffer, FramebufferFormat, Position};
 use wasm_bindgen::prelude::*;
-use monos_gfx::{Framebuffer, FramebufferFormat, Color, Position, Dimension, fonts, Rect};
+use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 
-
-const FB_SIZE: usize = cibo_online::GAME_DIMENSIONS.width as usize * cibo_online::GAME_DIMENSIONS.height as usize * 4;
+const FB_SIZE: usize =
+    cibo_online::GAME_DIMENSIONS.width as usize * cibo_online::GAME_DIMENSIONS.height as usize * 4;
 
 static mut RAW_FB: [u8; FB_SIZE] = [0u8; FB_SIZE];
 
@@ -16,35 +21,120 @@ unsafe fn raw_fb() -> &'static mut [u8; FB_SIZE] {
     unsafe { &mut *addr_of_mut!(RAW_FB) }
 }
 
+macro_rules! console_log {
+    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
 #[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+#[wasm_bindgen]
+#[allow(dead_code)]
 struct Game {
     width: u32,
     height: u32,
     framebuffer: Framebuffer<'static>,
+    local_state: Box<LocalState>, // box to avoid passing to js by value
+}
+
+// everything we don't want to pass to JS
+struct LocalState {
+    ws: WebSocket,
+    game_state: Rc<RefCell<Option<ClientGameState>>>,
 }
 
 #[wasm_bindgen]
+#[allow(dead_code)]
 impl Game {
-    pub fn new() -> Self {
+    pub fn new(server_host: &str) -> Self {
+        #[cfg(feature = "console_error_panic_hook")]
+        console_error_panic_hook::set_once();
+
         let format = FramebufferFormat {
             bytes_per_pixel: 4,
             stride: cibo_online::GAME_DIMENSIONS.width as u64,
             r_position: 0,
             g_position: 1,
             b_position: 2,
-            a_position: Some(3)
+            a_position: Some(3),
         };
 
         // safety: this is the only time we're accessing the raw framebuffer
-        let mut framebuffer = Framebuffer::new(unsafe {raw_fb()}, cibo_online::GAME_DIMENSIONS, format);
-        framebuffer.clear_alpha();
-        framebuffer.draw_str::<fonts::Cozette>(&Color::new(255, 255, 255), "Hello, world!",  &Position::new(0, 0));
+        let framebuffer =
+            Framebuffer::new(unsafe { raw_fb() }, cibo_online::GAME_DIMENSIONS, format);
+
+        let local_state = Box::new(LocalState {
+            ws: WebSocket::new(&format!("ws://{}/ws", server_host)).unwrap(),
+            game_state: Rc::new(RefCell::new(None)),
+        });
+
+        local_state
+            .ws
+            .set_binary_type(web_sys::BinaryType::Arraybuffer);
+        let game_state = local_state.game_state.clone();
+        let on_message = Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
+            if let Ok(array_buf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
+                let array = js_sys::Uint8Array::new(&array_buf);
+                let server_message = ServerMessage::from_bytes(&array.to_vec());
+                match server_message {
+                    Ok(ServerMessage::FullState(new_state)) => {
+                        game_state.replace(Some(new_state));
+                    }
+                    Ok(message) => {
+                        console_log!("Received message: {:?}", message);
+                        if let Some(ref mut game_state) = *game_state.borrow_mut() {
+                            game_state.handle_message(message);
+                        }
+                    }
+                    Err(e) => console_log!("Error deserializing server message: {:#?}", e),
+                }
+            }
+        });
+        local_state
+            .ws
+            .set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+        on_message.forget();
+
+        let on_error = Closure::<dyn FnMut(_)>::new(move |e: ErrorEvent| {
+            console_log!("WebSocket error: {:?}", e);
+        });
+        local_state
+            .ws
+            .set_onerror(Some(on_error.as_ref().unchecked_ref()));
+        on_error.forget();
+
+        let ws = local_state.ws.clone();
+        let on_open = Closure::<dyn FnMut()>::new(move || {
+            let client_message = ClientMessage::Connect {
+                name: "test".to_string(),
+            };
+            let bytes = client_message.to_bytes().unwrap();
+            ws.send_with_u8_array(&bytes).unwrap();
+        });
+        local_state
+            .ws
+            .set_onopen(Some(on_open.as_ref().unchecked_ref()));
+        on_open.forget();
 
         Self {
             width: cibo_online::GAME_DIMENSIONS.width,
             height: cibo_online::GAME_DIMENSIONS.height,
             framebuffer,
+            local_state,
         }
+    }
+
+    pub fn update(&mut self) {
+        self.framebuffer.clear();
+        self.framebuffer.clear_alpha();
+        self.framebuffer.draw_str::<fonts::Cozette>(
+            &Color::new(255, 255, 255),
+            "Hello, world!",
+            &Position::new(0, 0),
+        );
     }
 
     pub fn width(&self) -> u32 {

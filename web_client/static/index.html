@@ -1,5 +1,5 @@
+<!DOCTYPE html>
 <html>
-
 <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
     <style>
@@ -33,22 +33,24 @@
         async function run() {  
             let mod = await init();
             
-            let game = Game.new();
-
+            let game = Game.new(location.host);
             const canvas = document.getElementById('GameCanvas');
             const wrapper = document.getElementById('CanvasWrapper');
             canvas.width = game.width();
             canvas.height = game.height();
 
-            console.log(window.innerWidth, window.innerHeight, game.width(), game.height());
-            const biggest_scale_y = Math.floor(window.innerHeight / game.height());
-            const biggest_scale_x = Math.floor(window.innerWidth / game.width());
-            console.log(biggest_scale_x, biggest_scale_y);
-            const scale = Math.max(Math.min(biggest_scale_x, biggest_scale_y), 1);
-            if (scale >= 1) {
-                wrapper.style.width = `${game.width() * scale}px`;
-                wrapper.style.height = `${game.height() * scale}px`;
+            function resize() {
+                const biggest_scale_y = window.innerHeight / game.height();
+                const biggest_scale_x = window.innerWidth / game.width();
+                let scale = Math.min(biggest_scale_x, biggest_scale_y);
+                if (scale >= 1) {
+                    scale = Math.floor(scale);
+                }
+                canvas.style.width = `${game.width() * scale}px`;
+                canvas.style.height = `${game.height() * scale}px`;
             }
+            resize();
+            window.addEventListener('resize', resize);
 
 
             const ctx = canvas.getContext('2d', { alpha: false });
@@ -56,8 +58,10 @@
             const framebuffer = new Uint8Array(mod.memory.buffer, game.get_framebuffer(), game.width() * game.height() * 4);
 
             function render() {
+                game.update();
                 canvas_data.data.set(framebuffer);
                 ctx.putImageData(canvas_data, 0, 0);
+                requestAnimationFrame(render);
             }
 
             render();

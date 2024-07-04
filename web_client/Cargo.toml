@@ -11,16 +11,17 @@ default = ["console_error_panic_hook"]
 
 [dependencies]
 console_error_panic_hook = { version = "0.1.7", optional = true }
-monos_gfx = { git = "https://github.com/Fisch03/monOS", features = [ "lib_only" ] }
+monos_gfx = { git = "ssh://git@github.com/Fisch03/monOS.git", features = [ "lib_only" ] }
 cibo_online = { path = "../cibo_online" }
 wasm-bindgen = "0.2.92"
+js-sys = "0.3.69"
+wasm-bindgen-futures = "0.4.42"
 
 [dependencies.web-sys]
 version = "0.3.4"
 features = [
-  'Document',
-  'Element',
-  'HtmlElement',
-  'Node',
-  'Window',
+    "BinaryType",
+    "MessageEvent",
+    "ErrorEvent",
+    "WebSocket",
 ]

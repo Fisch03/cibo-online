@@ -11,7 +11,9 @@ fn main() {
     build_wasm.arg("build");
     build_wasm.arg("--target").arg("web");
     build_wasm.current_dir(web_client_dir);
-    build_wasm.status().unwrap();
+    let status = build_wasm.status().unwrap();
+
+    assert!(status.success(), "Failed to build web client");
 
     // copy client files to server
     let server_asset_dir = Path::new(SERVER_DIR).join("static");

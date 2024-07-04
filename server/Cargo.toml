@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = "0.7.5"
+axum = { version = "0.7.5", features = ["ws"] }
 tower-http = { version = "0.5", features = ["fs", "compression-gzip", "compression-br", "compression-deflate", "compression-zstd"] }
 tokio = { version = "1", features = ["full"] }
+futures = "0.3.30"
+cibo_online = { path = "../cibo_online" }
