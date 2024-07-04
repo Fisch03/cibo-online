@@ -1,6 +1,6 @@
 use crate::{
     client::{ClientGameState, ClientMessage},
-    Client, ClientId, GameState,
+    Client, ClientAction, ClientId, GameState,
 };
 
 use alloc::{boxed::Box, vec::Vec};
@@ -10,6 +10,7 @@ pub struct ServerGameState<T> {
     game_state: GameState,
     notify_client: Box<dyn Fn(&T, ServerMessage) + Send + Sync>,
     client_mapping: Vec<(ClientId, T)>,
+    queued_moves: Vec<(ClientId, ClientAction)>,
 }
 
 pub enum NotifyTarget {
@@ -27,6 +28,7 @@ impl<T> ServerGameState<T> {
             game_state: GameState::new(),
             notify_client: Box::new(notify_client),
             client_mapping: Vec::new(),
+            queued_moves: Vec::new(),
         }
     }
 
@@ -44,6 +46,37 @@ impl<T> ServerGameState<T> {
             ServerMessage::ClientLeft(client_id),
             NotifyTarget::AllExcept(client_id),
         );
+    }
+
+    pub fn tick(&mut self) {
+        self.queued_moves
+            .sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+
+        let mut current_clients = self.game_state.clients.iter();
+
+        if self.queued_moves.is_empty() {
+            return;
+        }
+
+        self.notify_clients(
+            ServerMessage::UpdateState(self.queued_moves.clone()),
+            NotifyTarget::All,
+        );
+
+        let mut new_clients = Vec::with_capacity(self.game_state.clients.len());
+        for queued in self.queued_moves.drain(..) {
+            while let Some(client) = current_clients.next() {
+                if client.id() != queued.0 {
+                    continue;
+                }
+
+                let mut new_client = client.clone();
+                new_client.apply_action(&queued.1);
+                new_clients.push(new_client);
+            }
+        }
+
+        self.game_state.clients = new_clients;
     }
 
     pub fn update(&mut self, client_id: ClientId, client_msg: ClientMessage) {
@@ -64,11 +97,23 @@ impl<T> ServerGameState<T> {
                 );
 
                 self.game_state.clients.push(client.clone());
+                self.game_state.clients.sort_unstable();
 
                 self.notify_clients(
                     ServerMessage::NewClient(client),
                     NotifyTarget::AllExcept(client_id),
                 );
+            }
+            ClientMessage::Action(action) => {
+                if let Some((_, existing_action)) = self
+                    .queued_moves
+                    .iter_mut()
+                    .find(|(id, _)| *id == client_id)
+                {
+                    existing_action.combine(&action);
+                } else {
+                    self.queued_moves.push((client_id, action));
+                }
             }
         }
     }
@@ -95,6 +140,7 @@ pub enum ServerMessage {
     NewClient(Client),
     ClientLeft(ClientId),
     FullState(ClientGameState),
+    UpdateState(Vec<(ClientId, ClientAction)>),
 }
 
 impl ServerMessage {

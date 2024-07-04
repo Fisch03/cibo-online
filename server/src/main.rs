@@ -56,6 +56,13 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
 
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(1000 / 60)).await;
+            GAME_STATE.lock().unwrap().tick();
+        }
+    });
+
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
@@ -90,7 +97,7 @@ async fn handle_socket(socket: WebSocket, client_addr: SocketAddr) {
                 }
             };
 
-            println!("{}: {:?}", client_addr, client_msg);
+            //println!("{}: {:?}", client_addr, client_msg);
             GAME_STATE.lock().unwrap().update(client_id, client_msg);
         }
     });

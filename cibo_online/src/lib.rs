@@ -6,7 +6,7 @@ use monos_gfx::Dimension;
 
 mod game_state;
 pub(crate) use game_state::GameState;
-pub use game_state::{Client, ClientId};
+pub use game_state::{Client, ClientAction, ClientId};
 
 pub mod client;
 pub mod server;

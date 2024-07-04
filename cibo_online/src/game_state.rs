@@ -7,7 +7,7 @@ use monos_gfx::Position;
 
 static CLIENT_ID: AtomicU32 = AtomicU32::new(0);
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ClientId(u32);
 
 impl ClientId {
@@ -21,6 +21,27 @@ pub struct Client {
     id: ClientId,
     name: String,
     position: Position,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClientAction {
+    pub movement: Position,
+}
+
+impl ClientAction {
+    pub fn new() -> Self {
+        ClientAction {
+            movement: Position::new(50, 50),
+        }
+    }
+
+    pub fn movement(&mut self, movement: Position) {
+        self.movement = movement;
+    }
+
+    pub fn combine(&mut self, newer: &Self) {
+        self.movement = newer.movement;
+    }
 }
 
 impl Client {
@@ -42,6 +63,30 @@ impl Client {
     pub fn position(&self) -> Position {
         self.position
     }
+
+    pub fn apply_action(&mut self, action: &ClientAction) {
+        self.position = action.movement;
+    }
+}
+
+impl PartialEq for Client {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Client {}
+
+impl PartialOrd for Client {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Client {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.id.cmp(&other.id)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,10 +94,23 @@ pub(crate) struct GameState {
     pub(crate) clients: Vec<Client>,
 }
 
+use monos_gfx::{Color, Framebuffer, Rect};
 impl GameState {
     pub fn new() -> Self {
         GameState {
             clients: Vec::new(),
+        }
+    }
+
+    pub fn render(&self, framebuffer: &mut Framebuffer) {
+        for client in &self.clients {
+            framebuffer.draw_rect(
+                &Rect::new(
+                    Position::new(client.position.x, client.position.y),
+                    Position::new(client.position.x + 10, client.position.y + 10),
+                ),
+                &Color::new(255, 255, 255),
+            );
         }
     }
 }

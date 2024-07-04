@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
     <style>
@@ -28,11 +29,11 @@
     <div id="CanvasWrapper"><canvas id="GameCanvas"></canvas></div>
 
     <script type="module">
-        import init, {Game} from './web_client.js';
+        import init, { Game } from './web_client.js';
 
-        async function run() {  
+        async function run() {
             let mod = await init();
-            
+
             let game = Game.new(location.host);
             const canvas = document.getElementById('GameCanvas');
             const wrapper = document.getElementById('CanvasWrapper');
@@ -42,7 +43,7 @@
             function resize() {
                 const biggest_scale_y = window.innerHeight / game.height();
                 const biggest_scale_x = window.innerWidth / game.width();
-                let scale = Math.min(biggest_scale_x, biggest_scale_y);
+                let scale = Math.min(biggest_scale_x, biggest_scale_y) + 0.1;
                 if (scale >= 1) {
                     scale = Math.floor(scale);
                 }
@@ -65,7 +66,7 @@
             }
 
             render();
-            
+
         }
 
         run();
