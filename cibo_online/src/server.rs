@@ -42,6 +42,8 @@ impl<T> ServerGameState<T> {
 
     pub fn remove_client(&mut self, client_id: ClientId) {
         self.client_mapping.retain(|(id, _)| *id != client_id);
+        self.game_state.clients.retain(|c| c.id() != client_id);
+
         self.notify_clients(
             ServerMessage::ClientLeft(client_id),
             NotifyTarget::AllExcept(client_id),
@@ -52,8 +54,6 @@ impl<T> ServerGameState<T> {
         self.queued_moves
             .sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
 
-        let mut current_clients = self.game_state.clients.iter();
-
         if self.queued_moves.is_empty() {
             return;
         }
@@ -63,20 +63,16 @@ impl<T> ServerGameState<T> {
             NotifyTarget::All,
         );
 
-        let mut new_clients = Vec::with_capacity(self.game_state.clients.len());
+        let mut clients = self.game_state.clients.iter_mut();
         for queued in self.queued_moves.drain(..) {
-            while let Some(client) = current_clients.next() {
+            while let Some(client) = clients.next() {
                 if client.id() != queued.0 {
                     continue;
                 }
 
-                let mut new_client = client.clone();
-                new_client.apply_action(&queued.1);
-                new_clients.push(new_client);
+                client.apply_action(&queued.1);
             }
         }
-
-        self.game_state.clients = new_clients;
     }
 
     pub fn update(&mut self, client_id: ClientId, client_msg: ClientMessage) {

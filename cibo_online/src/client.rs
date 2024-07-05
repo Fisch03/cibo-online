@@ -25,7 +25,7 @@ impl ClientGameState {
         framebuffer.draw_rect(
             &Rect::new(
                 Position::new(self.client.position().x, self.client.position().y),
-                Position::new(self.client.position().x + 10, self.client.position().y + 10),
+                Position::new(self.client.position().x + 32, self.client.position().y + 32),
             ),
             &Color::new(255, 255, 255),
         );

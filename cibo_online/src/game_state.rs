@@ -107,7 +107,7 @@ impl GameState {
             framebuffer.draw_rect(
                 &Rect::new(
                     Position::new(client.position.x, client.position.y),
-                    Position::new(client.position.x + 10, client.position.y + 10),
+                    Position::new(client.position.x + 32, client.position.y + 32),
                 ),
                 &Color::new(255, 255, 255),
             );

@@ -87,6 +87,8 @@ async fn handle_socket(socket: WebSocket, client_addr: SocketAddr) {
         .unwrap()
         .new_client(PerClientState { tx: client_tx });
 
+    println!("{} ({:?}): connected", client_addr, client_id);
+
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(Message::Binary(msg))) = socket_rx.next().await {
             let client_msg = match ClientMessage::from_bytes(&msg) {
@@ -97,7 +99,6 @@ async fn handle_socket(socket: WebSocket, client_addr: SocketAddr) {
                 }
             };
 
-            //println!("{}: {:?}", client_addr, client_msg);
             GAME_STATE.lock().unwrap().update(client_id, client_msg);
         }
     });
@@ -127,6 +128,6 @@ async fn handle_socket(socket: WebSocket, client_addr: SocketAddr) {
         _ = send_task => {
         }
     }
-    println!("{}: disconnected", client_addr);
+    println!("{} ({:?}): disconnected", client_addr, client_id);
     GAME_STATE.lock().unwrap().remove_client(client_id);
 }

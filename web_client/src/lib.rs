@@ -196,22 +196,22 @@ impl Game {
                 let mut action = ClientAction::new();
                 action.movement(game_state.client.position());
                 if movement.left {
-                    action.movement.x -= 5;
+                    action.movement.x -= 1;
                 }
                 if movement.right {
-                    action.movement.x += 5;
+                    action.movement.x += 1;
                 }
                 if movement.up {
-                    action.movement.y -= 5;
+                    action.movement.y -= 1;
                 }
                 if movement.down {
-                    action.movement.y += 5;
+                    action.movement.y += 1;
                 }
 
                 action.movement.x = action.movement.x.max(0);
-                action.movement.x = action.movement.x.min(self.width as i64 - 10);
+                action.movement.x = action.movement.x.min(self.width as i64 - 32);
                 action.movement.y = action.movement.y.max(0);
-                action.movement.y = action.movement.y.min(self.height as i64 - 10);
+                action.movement.y = action.movement.y.min(self.height as i64 - 32);
 
                 game_state.client.apply_action(&action);
                 let client_message = ClientMessage::Action(action);
