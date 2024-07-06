@@ -3,7 +3,7 @@ use crate::{
     Client, ClientAction, ClientId, GameState,
 };
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 
 pub struct ServerGameState<T> {
@@ -111,6 +111,9 @@ impl<T> ServerGameState<T> {
                     self.queued_moves.push((client_id, action));
                 }
             }
+            ClientMessage::Chat(message) => {
+                self.notify_clients(ServerMessage::Chat(client_id, message), NotifyTarget::All);
+            }
         }
     }
 
@@ -137,6 +140,7 @@ pub enum ServerMessage {
     ClientLeft(ClientId),
     FullState(ClientGameState),
     UpdateState(Vec<(ClientId, ClientAction)>),
+    Chat(ClientId, String),
 }
 
 impl ServerMessage {

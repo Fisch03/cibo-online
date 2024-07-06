@@ -1,9 +1,8 @@
 use std::{cell::RefCell, ptr::addr_of_mut, rc::Rc};
 
 use cibo_online::{
-    client::{ClientGameState, ClientMessage},
+    client::{ClientGameState, ClientMessage, MoveDirection},
     server::ServerMessage,
-    ClientAction,
 };
 use monos_gfx::{Framebuffer, FramebufferFormat};
 use wasm_bindgen::prelude::*;
@@ -45,29 +44,6 @@ struct Game {
 struct LocalState {
     ws: WebSocket,
     game_state: Rc<RefCell<Option<ClientGameState>>>,
-    movement: Rc<RefCell<Movement>>,
-}
-
-struct Movement {
-    up: bool,
-    down: bool,
-    left: bool,
-    right: bool,
-}
-
-impl Movement {
-    pub fn new() -> Self {
-        Self {
-            up: false,
-            down: false,
-            left: false,
-            right: false,
-        }
-    }
-
-    pub fn any(&self) -> bool {
-        self.up || self.down || self.left || self.right
-    }
 }
 
 #[wasm_bindgen]
@@ -93,19 +69,41 @@ impl Game {
         let local_state = Box::new(LocalState {
             ws: WebSocket::new(&format!("ws://{}/ws", server_host)).unwrap(),
             game_state: Rc::new(RefCell::new(None)),
-            movement: Rc::new(RefCell::new(Movement::new())),
         });
 
-        let movement = local_state.movement.clone();
+        let game_state = local_state.game_state.clone();
+        let ws = local_state.ws.clone();
         let on_keydown = Closure::<dyn FnMut(_)>::new(move |e: web_sys::KeyboardEvent| {
-            let mut movement = movement.borrow_mut();
-            match e.key().as_str() {
-                "ArrowUp" => movement.up = true,
-                "ArrowDown" => movement.down = true,
-                "ArrowLeft" => movement.left = true,
-                "ArrowRight" => movement.right = true,
-                _ => (),
-            };
+            if let Some(ref mut game_state) = *game_state.borrow_mut() {
+                match e.key().as_str() {
+                    "ArrowUp" => game_state.input.walk(MoveDirection::Up),
+                    "ArrowDown" => game_state.input.walk(MoveDirection::Down),
+                    "ArrowLeft" => game_state.input.walk(MoveDirection::Left),
+                    "ArrowRight" => game_state.input.walk(MoveDirection::Right),
+                    "Backspace" => game_state.input.backspace(),
+                    "Escape" => game_state.input.exit_chat(),
+                    "Enter" => {
+                        if let Some(client_message) = game_state.input.toggle_chat() {
+                            ws.send_with_u8_array(&client_message.to_bytes().unwrap())
+                                .unwrap();
+                        }
+                    }
+
+                    other => {
+                        if other.len() == 1 {
+                            let char = other.chars().next().unwrap();
+                            if char.is_ascii() {
+                                game_state.input.chat(char);
+                                if !game_state.input.chat_open() {
+                                    return; // dont prevent_default if chat is closed
+                                }
+                            }
+                        }
+                    }
+                };
+
+                e.prevent_default();
+            }
         });
 
         web_sys::window()
@@ -114,16 +112,17 @@ impl Game {
             .unwrap();
         on_keydown.forget();
 
-        let movement = local_state.movement.clone();
+        let game_state = local_state.game_state.clone();
         let on_keyup = Closure::<dyn FnMut(_)>::new(move |e: web_sys::KeyboardEvent| {
-            let mut movement = movement.borrow_mut();
-            match e.key().as_str() {
-                "ArrowUp" => movement.up = false,
-                "ArrowDown" => movement.down = false,
-                "ArrowLeft" => movement.left = false,
-                "ArrowRight" => movement.right = false,
-                _ => (),
-            };
+            if let Some(ref mut game_state) = *game_state.borrow_mut() {
+                match e.key().as_str() {
+                    "ArrowUp" => game_state.input.stop(MoveDirection::Up),
+                    "ArrowDown" => game_state.input.stop(MoveDirection::Down),
+                    "ArrowLeft" => game_state.input.stop(MoveDirection::Left),
+                    "ArrowRight" => game_state.input.stop(MoveDirection::Right),
+                    _ => (),
+                }
+            }
         });
 
         web_sys::window()
@@ -187,41 +186,17 @@ impl Game {
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, delta_ms: f32) {
+        let delta_ms = delta_ms.round() as u64;
         self.framebuffer.clear();
         self.framebuffer.clear_alpha();
         if let Some(ref mut game_state) = *self.local_state.game_state.borrow_mut() {
-            let movement = self.local_state.movement.borrow();
-            if movement.any() {
-                let mut action = ClientAction::new();
-                action.movement(game_state.client.position());
-                if movement.left {
-                    action.movement.x -= 1;
-                }
-                if movement.right {
-                    action.movement.x += 1;
-                }
-                if movement.up {
-                    action.movement.y -= 1;
-                }
-                if movement.down {
-                    action.movement.y += 1;
-                }
-
-                action.movement.x = action.movement.x.max(0);
-                action.movement.x = action.movement.x.min(self.width as i64 - 32);
-                action.movement.y = action.movement.y.max(0);
-                action.movement.y = action.movement.y.min(self.height as i64 - 32);
-
-                game_state.client.apply_action(&action);
-                let client_message = ClientMessage::Action(action);
+            if let Some(client_message) = game_state.update(delta_ms, &mut self.framebuffer) {
                 self.local_state
                     .ws
                     .send_with_u8_array(&client_message.to_bytes().unwrap())
                     .unwrap();
             }
-
-            game_state.render(&mut self.framebuffer);
         }
     }
 

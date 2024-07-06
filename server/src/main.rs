@@ -58,7 +58,10 @@ async fn main() {
 
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_millis(1000 / 60)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(
+                cibo_online::SERVER_TICK_RATE,
+            ))
+            .await;
             GAME_STATE.lock().unwrap().tick();
         }
     });

@@ -58,8 +58,13 @@
             const canvas_data = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const framebuffer = new Uint8Array(mod.memory.buffer, game.get_framebuffer(), game.width() * game.height() * 4);
 
+            let last_time = performance.now();
             function render() {
-                game.update();
+                const now = performance.now();
+                const dt = now - last_time;
+                last_time = now;
+                game.update(dt);
+
                 canvas_data.data.set(framebuffer);
                 ctx.putImageData(canvas_data, 0, 0);
                 requestAnimationFrame(render);
