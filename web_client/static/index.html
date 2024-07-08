@@ -62,6 +62,9 @@
             function render() {
                 const now = performance.now();
                 const dt = now - last_time;
+                const fps = 1000 / dt;
+                console.log(fps);
+
                 last_time = now;
                 game.update(dt);
 

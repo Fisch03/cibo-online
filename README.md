@@ -22,6 +22,7 @@ deserialize incoming messages into `ServerMessage`s. to connect to the server, s
 your client will receive a `ServerMessage::FullState` as a response containing your clients initial state that you should save.
 every other type of `ServerMessage` you receive from that point on you can route straight into that saved state using its `handle_message` function.
 all your client needs to do now is each frame:
-- `clear` (and if needed `clear_alpha`) the framebuffer and call the `render` function on your `ClientGameState` to draw the next frame
-- build `ClientAction`s according to your input, `apply` them to the your `ClientGameState`s client and send them over the websocket using a `ClientMessage::Action`
-thats it! you can look at the wasm implementation [here](https://github.com/Fisch03/cibo-online/blob/master/web_client/src/lib.rs) to get a better idea (the websocket and input handling is quite verbose though, blame wasm/js...)
+- `clear` (and if needed `clear_alpha`) the framebuffer and call the `update` function on your `ClientGameState` to process and draw the next frame
+- call the `add_input` function on your `ClientGameState` according to your platforms input
+
+thats it! you can look at the wasm implementation [here](https://github.com/Fisch03/cibo-online/blob/master/web_client/src/lib.rs) to get a better idea :)

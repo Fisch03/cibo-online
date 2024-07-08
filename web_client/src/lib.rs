@@ -1,10 +1,13 @@
 use std::{cell::RefCell, ptr::addr_of_mut, rc::Rc};
 
 use cibo_online::{
-    client::{ClientGameState, ClientMessage, MoveDirection},
+    client::{ClientGameState, ClientMessage},
     server::ServerMessage,
 };
-use monos_gfx::{Framebuffer, FramebufferFormat};
+use monos_gfx::{
+    input::{Key, KeyEvent, KeyState, RawKey},
+    Framebuffer, FramebufferFormat,
+};
 use wasm_bindgen::prelude::*;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 
@@ -46,6 +49,23 @@ struct LocalState {
     game_state: Rc<RefCell<Option<ClientGameState>>>,
 }
 
+fn js_key_to_key(key: &str) -> Option<Key> {
+    match key {
+        "ArrowUp" => Some(Key::RawKey(RawKey::ArrowUp)),
+        "ArrowDown" => Some(Key::RawKey(RawKey::ArrowDown)),
+        "ArrowLeft" => Some(Key::RawKey(RawKey::ArrowLeft)),
+        "ArrowRight" => Some(Key::RawKey(RawKey::ArrowRight)),
+        "Backspace" => Some(Key::RawKey(RawKey::Backspace)),
+        "Escape" => Some(Key::RawKey(RawKey::Escape)),
+        "Enter" => Some(Key::RawKey(RawKey::Return)),
+        other if other.len() == 1 => {
+            let char = other.chars().next().unwrap();
+            Some(Key::Unicode(char))
+        }
+        _ => None,
+    }
+}
+
 #[wasm_bindgen]
 #[allow(dead_code)]
 impl Game {
@@ -72,40 +92,18 @@ impl Game {
         });
 
         let game_state = local_state.game_state.clone();
-        let ws = local_state.ws.clone();
         let on_keydown = Closure::<dyn FnMut(_)>::new(move |e: web_sys::KeyboardEvent| {
             if let Some(ref mut game_state) = *game_state.borrow_mut() {
-                match e.key().as_str() {
-                    "ArrowUp" => game_state.input.walk(MoveDirection::Up),
-                    "ArrowDown" => game_state.input.walk(MoveDirection::Down),
-                    "ArrowLeft" => game_state.input.walk(MoveDirection::Left),
-                    "ArrowRight" => game_state.input.walk(MoveDirection::Right),
-                    "Backspace" => game_state.input.backspace(),
-                    "Escape" => game_state.input.exit_chat(),
-                    "Enter" => {
-                        if let Some(client_message) = game_state.input.toggle_chat() {
-                            ws.send_with_u8_array(&client_message.to_bytes().unwrap())
-                                .unwrap();
-                        }
-                    }
-
-                    other => {
-                        if other.len() == 1 {
-                            let char = other.chars().next().unwrap();
-                            if char.is_ascii() {
-                                game_state.input.chat(char);
-                                if !game_state.input.chat_open() {
-                                    return; // dont prevent_default if chat is closed
-                                }
-                            }
-                        }
-                    }
-                };
+                if let Some(key) = js_key_to_key(&e.key()) {
+                    game_state.add_input(KeyEvent {
+                        key,
+                        state: KeyState::Down,
+                    });
+                }
 
                 e.prevent_default();
             }
         });
-
         web_sys::window()
             .unwrap()
             .add_event_listener_with_callback("keydown", on_keydown.as_ref().unchecked_ref())
@@ -115,16 +113,14 @@ impl Game {
         let game_state = local_state.game_state.clone();
         let on_keyup = Closure::<dyn FnMut(_)>::new(move |e: web_sys::KeyboardEvent| {
             if let Some(ref mut game_state) = *game_state.borrow_mut() {
-                match e.key().as_str() {
-                    "ArrowUp" => game_state.input.stop(MoveDirection::Up),
-                    "ArrowDown" => game_state.input.stop(MoveDirection::Down),
-                    "ArrowLeft" => game_state.input.stop(MoveDirection::Left),
-                    "ArrowRight" => game_state.input.stop(MoveDirection::Right),
-                    _ => (),
+                if let Some(key) = js_key_to_key(&e.key()) {
+                    game_state.add_input(KeyEvent {
+                        key,
+                        state: KeyState::Up,
+                    });
                 }
             }
         });
-
         web_sys::window()
             .unwrap()
             .add_event_listener_with_callback("keyup", on_keyup.as_ref().unchecked_ref())
@@ -191,12 +187,12 @@ impl Game {
         self.framebuffer.clear();
         self.framebuffer.clear_alpha();
         if let Some(ref mut game_state) = *self.local_state.game_state.borrow_mut() {
-            if let Some(client_message) = game_state.update(delta_ms, &mut self.framebuffer) {
+            game_state.update(delta_ms, &mut self.framebuffer, &mut |client_msg| {
                 self.local_state
                     .ws
-                    .send_with_u8_array(&client_message.to_bytes().unwrap())
+                    .send_with_u8_array(&client_msg.to_bytes().unwrap())
                     .unwrap();
-            }
+            });
         }
     }
 

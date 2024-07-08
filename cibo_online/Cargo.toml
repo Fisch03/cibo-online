@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-monos_gfx = { git = "ssh://git@github.com/Fisch03/monOS.git", features = [ "lib_only", "serde" ] }
+monos_gfx = { git = "ssh://git@github.com/Fisch03/monOS.git", default-features = false }
 postcard = { version = "1.0.8", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.203", default-features = false, features = ["derive", "alloc"] }

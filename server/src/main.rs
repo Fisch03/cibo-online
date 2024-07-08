@@ -102,6 +102,13 @@ async fn handle_socket(socket: WebSocket, client_addr: SocketAddr) {
                 }
             };
 
+            match client_msg {
+                ClientMessage::Chat(ref msg) => {
+                    println!("{} ({:?}) says '{}'", client_addr, client_id, msg);
+                }
+                _ => (),
+            }
+
             GAME_STATE.lock().unwrap().update(client_id, client_msg);
         }
     });
