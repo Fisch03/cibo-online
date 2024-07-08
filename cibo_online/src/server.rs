@@ -112,7 +112,7 @@ impl<T> ServerGameState<T> {
                 }
             }
             ClientMessage::Chat(message) => {
-                self.notify_clients(ServerMessage::Chat(client_id, message), NotifyTarget::All);
+                self.notify_clients(ServerMessage::Chat(client_id, message), NotifyTarget::All)
             }
         }
     }

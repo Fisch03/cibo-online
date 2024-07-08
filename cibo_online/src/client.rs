@@ -1,11 +1,12 @@
 mod render;
 
-use crate::{server::ServerMessage, Client, ClientAction, ClientId, GameState};
+use crate::{
+    game_state::MoveDirection, server::ServerMessage, Client, ClientAction, ClientId, GameState,
+};
 
 use alloc::{collections::VecDeque, string::String, vec::Vec};
 use monos_gfx::{
     input::{Input, Key, KeyEvent, KeyState, RawKey},
-    ui::{self, UIFrame},
     Framebuffer,
 };
 use serde::{Deserialize, Serialize};
@@ -36,33 +37,17 @@ pub struct ClientGameState {
     local: ClientLocalState,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ClientLocalState {
     time_ms: u64,
     last_tick: u64,
 
-    ui_frame: UIFrame,
+    render_state: render::RenderState,
+
     own_chat: Option<String>,
     other_chat: VecDeque<ChatMessage>,
 
     input: Input,
-    movement: MoveDirection,
-}
-
-impl Default for ClientLocalState {
-    fn default() -> Self {
-        Self {
-            time_ms: 0,
-            last_tick: 0,
-
-            ui_frame: UIFrame::new(ui::Direction::TopToBottom),
-            own_chat: None,
-            other_chat: VecDeque::new(),
-
-            input: Input::default(),
-            movement: MoveDirection::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -70,21 +55,6 @@ pub struct ChatMessage {
     pub client_id: ClientId,
     pub message: String,
     pub expiry: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MoveDirection {
-    Up,
-    Down,
-    Left,
-    Right,
-    None,
-}
-
-impl Default for MoveDirection {
-    fn default() -> Self {
-        MoveDirection::None
-    }
 }
 
 impl ClientGameState {
@@ -148,11 +118,12 @@ impl ClientGameState {
                 if let Some(direction) = direction {
                     match input.state {
                         KeyState::Down => {
-                            self.local.movement = direction;
+                            self.client.movement = direction;
                         }
                         KeyState::Up => {
-                            if self.local.movement == direction {
-                                self.local.movement = MoveDirection::None;
+                            if self.client.movement == direction {
+                                self.client.movement = MoveDirection::None;
+                                client_action.movement(self.client.position, MoveDirection::None);
                             }
                         }
                         _ => {}
@@ -160,15 +131,17 @@ impl ClientGameState {
                 }
             }
 
-            let mut position = self.client.position();
-            match self.local.movement {
-                MoveDirection::Up => position.y -= 1 * tick_amt as i64,
-                MoveDirection::Down => position.y += 1 * tick_amt as i64,
-                MoveDirection::Left => position.x -= 1 * tick_amt as i64,
-                MoveDirection::Right => position.x += 1 * tick_amt as i64,
-                MoveDirection::None => (),
+            if self.client.movement != MoveDirection::None {
+                let mut position = self.client.position;
+                match self.client.movement {
+                    MoveDirection::Up => position.y -= 1 * tick_amt as i64,
+                    MoveDirection::Down => position.y += 1 * tick_amt as i64,
+                    MoveDirection::Left => position.x -= 1 * tick_amt as i64,
+                    MoveDirection::Right => position.x += 1 * tick_amt as i64,
+                    MoveDirection::None => unreachable!(),
+                }
+                client_action.movement(position, self.client.movement)
             }
-            client_action.movement(position);
         } else {
             for input in self.local.input.keyboard.iter() {
                 match input.key {
@@ -184,6 +157,10 @@ impl ClientGameState {
             self.client.apply_action(&client_action);
             send_msg(ClientMessage::Action(client_action))
         }
+
+        self.local
+            .other_chat
+            .retain(|chat| chat.expiry > self.local.time_ms);
 
         self.render(framebuffer, send_msg);
 

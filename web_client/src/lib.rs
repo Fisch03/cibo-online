@@ -1,4 +1,4 @@
-use std::{cell::RefCell, ptr::addr_of_mut, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use cibo_online::{
     client::{ClientGameState, ClientMessage},
@@ -6,22 +6,17 @@ use cibo_online::{
 };
 use monos_gfx::{
     input::{Key, KeyEvent, KeyState, RawKey},
+    types::Dimension,
     Framebuffer, FramebufferFormat,
 };
 use wasm_bindgen::prelude::*;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 
-const FB_SIZE: usize =
-    cibo_online::GAME_DIMENSIONS.width as usize * cibo_online::GAME_DIMENSIONS.height as usize * 4;
-
-static mut RAW_FB: [u8; FB_SIZE] = [0u8; FB_SIZE];
-
-/// get a mutable reference to the raw framebuffer
-///
-/// safety: this is safe as long as it is done only once. since we're in a wasm environment, there can be no threading issues.
-// yeah, this is kind of horrible but the way the monos_gfx::Framebuffer is designed makes the alternatives really ugly
-unsafe fn raw_fb() -> &'static mut [u8; FB_SIZE] {
-    unsafe { &mut *addr_of_mut!(RAW_FB) }
+/// create a new static framebuffer
+fn raw_fb() -> &'static mut Vec<u8> {
+    let fb = Box::new(Vec::new());
+    let fb = Box::leak(fb);
+    &mut *fb
 }
 
 macro_rules! console_log {
@@ -39,6 +34,7 @@ extern "C" {
 struct Game {
     width: u32,
     height: u32,
+    raw_fb: *mut Vec<u8>,
     framebuffer: Framebuffer<'static>,
     local_state: Box<LocalState>, // box to avoid passing to js by value
 }
@@ -69,22 +65,30 @@ fn js_key_to_key(key: &str) -> Option<Key> {
 #[wasm_bindgen]
 #[allow(dead_code)]
 impl Game {
-    pub fn new(server_host: &str) -> Self {
+    pub fn new(server_host: &str, width: u32, height: u32) -> Self {
         #[cfg(feature = "console_error_panic_hook")]
         console_error_panic_hook::set_once();
 
+        console_log!("Initializing game with dimensions {}x{}", width, height);
+
         let format = FramebufferFormat {
             bytes_per_pixel: 4,
-            stride: cibo_online::GAME_DIMENSIONS.width as u64,
+            stride: width as u64,
             r_position: 0,
             g_position: 1,
             b_position: 2,
             a_position: Some(3),
         };
 
-        // safety: this is the only time we're accessing the raw framebuffer
-        let framebuffer =
-            Framebuffer::new(unsafe { raw_fb() }, cibo_online::GAME_DIMENSIONS, format);
+        let framebuffer = raw_fb();
+        framebuffer.resize((width * height * format.bytes_per_pixel as u32) as usize, 0);
+
+        // this is all sorts of horrible, but the current design of the Framebuffer type makes it
+        // the easiest option. it should be safe though since wasm is always single-threaded
+        let raw_fb = framebuffer as *mut Vec<u8>;
+
+        let mut framebuffer = Framebuffer::new(framebuffer, Dimension::new(width, height), format);
+        framebuffer.clear_alpha(); // set the alpha channel to be fully visible. we only need to do this once since the program itself does not modify the alpha channel
 
         let local_state = Box::new(LocalState {
             ws: WebSocket::new(&format!("ws://{}/ws", server_host)).unwrap(),
@@ -101,7 +105,7 @@ impl Game {
                     });
                 }
 
-                e.prevent_default();
+                // e.prevent_default();
             }
         });
         web_sys::window()
@@ -175,17 +179,34 @@ impl Game {
         on_open.forget();
 
         Self {
-            width: cibo_online::GAME_DIMENSIONS.width,
-            height: cibo_online::GAME_DIMENSIONS.height,
+            width,
+            height,
             framebuffer,
             local_state,
+            raw_fb,
         }
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        console_log!("Resizing game to {}x{}", width, height);
+
+        self.width = width;
+        self.height = height;
+        let framebuffer = unsafe { &mut *self.raw_fb };
+        framebuffer.resize(
+            (width * height * self.framebuffer.format().bytes_per_pixel as u32) as usize,
+            0,
+        );
+
+        let mut format = self.framebuffer.format().clone();
+        format.stride = width as u64;
+
+        self.framebuffer = Framebuffer::new(framebuffer, Dimension::new(width, height), format);
+        self.framebuffer.clear_alpha();
     }
 
     pub fn update(&mut self, delta_ms: f32) {
         let delta_ms = delta_ms.round() as u64;
-        self.framebuffer.clear();
-        self.framebuffer.clear_alpha();
         if let Some(ref mut game_state) = *self.local_state.game_state.borrow_mut() {
             game_state.update(delta_ms, &mut self.framebuffer, &mut |client_msg| {
                 self.local_state

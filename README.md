@@ -8,6 +8,15 @@ Cibo Online is a part of [monOS](https://github.com/Fisch03/monOS/), but can als
 - [`web_client`](https://github.com/Fisch03/cibo-online/tree/master/server) contains the webassembly client
 - the source for the client shipped with monOS is available in the monOS source tree [here](https://github.com/Fisch03/monOS/tree/master/userspace/cibo_online)
 
+## a few noteworthy things
+### performance
+its horrible. i know. for maximum compatibility with the monOS version, i currently draw onto the raw framebuffer with zero gpu acceleration whatsoever. 
+this is obviously not a great idea and will be changed at some point (probably when i have the monOS version in place).
+
+### open source
+the two guides below are somewhat useless for the time being since not the whole source code is contained in this repository. 
+namely the graphics library, monos_gfx is part of the main OS repo that i am unable to open source for now due to spoiler reasons ;)
+
 ## hosting your own server
 should be a simple `cargo run` in the workspace root :) you will need to install [wasm-pack](https://rustwasm.github.io/wasm-pack/) first
 
@@ -22,7 +31,7 @@ deserialize incoming messages into `ServerMessage`s. to connect to the server, s
 your client will receive a `ServerMessage::FullState` as a response containing your clients initial state that you should save.
 every other type of `ServerMessage` you receive from that point on you can route straight into that saved state using its `handle_message` function.
 all your client needs to do now is each frame:
-- `clear` (and if needed `clear_alpha`) the framebuffer and call the `update` function on your `ClientGameState` to process and draw the next frame
+- if needed `clear_alpha` the framebuffer and call the `update` function on your `ClientGameState` to process and draw the next frame
 - call the `add_input` function on your `ClientGameState` according to your platforms input
 
 thats it! you can look at the wasm implementation [here](https://github.com/Fisch03/cibo-online/blob/master/web_client/src/lib.rs) to get a better idea :)

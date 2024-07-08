@@ -11,5 +11,4 @@ pub use game_state::{Client, ClientAction, ClientId};
 pub mod client;
 pub mod server;
 
-pub const GAME_DIMENSIONS: Dimension = Dimension::new(640, 480);
 pub const SERVER_TICK_RATE: u64 = 1000 / 60;

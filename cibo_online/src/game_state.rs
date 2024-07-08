@@ -20,12 +20,29 @@ impl ClientId {
 pub struct Client {
     id: ClientId,
     name: String,
-    position: Position,
+    pub(crate) position: Position,
+    pub(crate) movement: MoveDirection,
+    pub(crate) look_direction: MoveDirection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientAction {
-    pub movement: Option<Position>,
+    pub movement: Option<(Position, MoveDirection)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MoveDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+    None,
+}
+
+impl Default for MoveDirection {
+    fn default() -> Self {
+        MoveDirection::None
+    }
 }
 
 impl ClientAction {
@@ -33,8 +50,8 @@ impl ClientAction {
         ClientAction { movement: None }
     }
 
-    pub fn movement(&mut self, movement: Position) {
-        self.movement = Some(movement);
+    pub fn movement(&mut self, movement: Position, direction: MoveDirection) {
+        self.movement = Some((movement, direction));
     }
 
     pub fn any(&self) -> bool {
@@ -50,7 +67,13 @@ impl ClientAction {
 
 impl Client {
     pub fn new(id: ClientId, name: String, position: Position) -> Self {
-        Client { id, name, position }
+        Client {
+            id,
+            name,
+            position,
+            movement: MoveDirection::None,
+            look_direction: MoveDirection::None,
+        }
     }
 
     #[inline]
@@ -63,14 +86,13 @@ impl Client {
         &self.name
     }
 
-    #[inline]
-    pub fn position(&self) -> Position {
-        self.position
-    }
-
     pub fn apply_action(&mut self, action: &ClientAction) {
         if let Some(movement) = action.movement {
-            self.position = movement;
+            self.position = movement.0;
+            self.movement = movement.1;
+            if movement.1 != MoveDirection::None {
+                self.look_direction = movement.1;
+            }
         }
     }
 }

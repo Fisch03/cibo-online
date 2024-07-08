@@ -31,39 +31,40 @@
     <script type="module">
         import init, { Game } from './web_client.js';
 
+
         async function run() {
             let mod = await init();
 
-            let game = Game.new(location.host);
             const canvas = document.getElementById('GameCanvas');
             const wrapper = document.getElementById('CanvasWrapper');
-            canvas.width = game.width();
-            canvas.height = game.height();
+
+            let scale = 4, canvas_data, framebuffer;
+            let game = Game.new(location.host, window.innerWidth / scale, window.innerHeight / scale);
+            const ctx = canvas.getContext('2d', { alpha: false });
 
             function resize() {
-                const biggest_scale_y = window.innerHeight / game.height();
-                const biggest_scale_x = window.innerWidth / game.width();
-                let scale = Math.min(biggest_scale_x, biggest_scale_y) + 0.1;
-                if (scale >= 1) {
-                    scale = Math.floor(scale);
-                }
+                const scale_x = window.innerWidth / 480; 
+                const scale_y = window.innerHeight / 240;
+                scale = Math.max(1, Math.floor(Math.max(scale_x, scale_y)));
+
+                game.resize(window.innerWidth / scale, window.innerHeight / scale);
+                canvas.width = game.width();
+                canvas.height = game.height();
                 canvas.style.width = `${game.width() * scale}px`;
                 canvas.style.height = `${game.height() * scale}px`;
+
+                canvas_data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                framebuffer = new Uint8Array(mod.memory.buffer, game.get_framebuffer(), game.width() * game.height() * 4);
             }
             resize();
+
             window.addEventListener('resize', resize);
 
-
-            const ctx = canvas.getContext('2d', { alpha: false });
-            const canvas_data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const framebuffer = new Uint8Array(mod.memory.buffer, game.get_framebuffer(), game.width() * game.height() * 4);
 
             let last_time = performance.now();
             function render() {
                 const now = performance.now();
                 const dt = now - last_time;
-                const fps = 1000 / dt;
-                console.log(fps);
 
                 last_time = now;
                 game.update(dt);
