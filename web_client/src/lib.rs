@@ -5,6 +5,7 @@ use cibo_online::{
     server::ServerMessage,
 };
 use monos_gfx::{
+    font::{Cozette, Glean},
     image::SliceReader,
     input::{Input, Key, KeyEvent, KeyState, RawKey},
     ui::{self, UIFrame},
@@ -243,11 +244,14 @@ impl Game {
                 &mut self.framebuffer,
                 rect,
                 &mut self.local_state.input.borrow_mut(),
-                |ctx| {
-                    ctx.margin(ui::MarginMode::Grow);
+                |ui| {
+                    ui.margin(ui::MarginMode::Grow);
 
-                    ctx.label("please enter a nickname!");
-                    if ctx.textbox(&mut self.local_state.name_input).submitted {
+                    ui.label::<Cozette>("please enter a nickname!");
+                    if ui
+                        .textbox::<Cozette>(&mut self.local_state.name_input)
+                        .submitted
+                    {
                         let client_msg = ClientMessage::Connect {
                             name: self.local_state.name_input.clone(),
                         };
@@ -260,18 +264,16 @@ impl Game {
                 },
             );
 
-            let mut credits_frame = UIFrame::new_stateless(ui::Direction::LeftToRight);
-            let mut rect = fb_rect.clone();
-            rect.min.y = self.framebuffer.dimensions().height as i64 - 16;
+            let mut credits_frame = UIFrame::new_stateless(ui::Direction::BottomToTop);
 
             credits_frame.draw_frame(
                 &mut self.framebuffer,
-                rect,
+                fb_rect,
                 &mut self.local_state.input.borrow_mut(),
-                |ctx| {
-                    ctx.margin(ui::MarginMode::Grow);
+                |ui| {
+                    ui.margin(ui::MarginMode::Grow);
 
-                    ctx.label("made with ♡ by sakanaa");
+                    ui.label::<Glean>("made with ♡ by sakanaa");
                 },
             );
 

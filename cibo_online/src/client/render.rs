@@ -1,10 +1,12 @@
-use super::{ClientGameState, ClientMessage};
-use crate::game_state::{Client, MoveDirection};
+use super::{chat_widget::ChatWidget, ClientGameState, ClientMessage};
+use crate::game_state::{Client, ClientId, MoveDirection};
+use alloc::vec::Vec;
 
 use monos_gfx::{
+    font::Glean,
     image::SliceReader,
     types::*,
-    ui::{Direction, MarginMode, UIFrame},
+    ui::{widgets, Direction, MarginMode, TextWrap, UIContext, UIFrame},
     Framebuffer, Image,
 };
 
@@ -24,7 +26,7 @@ macro_rules! include_ppm {
 #[derive(Debug, Clone)]
 pub struct RenderState {
     camera: Position,
-    client_ui: UIFrame,
+    client_uis: Vec<(ClientId, UIFrame)>,
 
     assets: Assets,
 }
@@ -35,8 +37,8 @@ impl Default for RenderState {
 
         Self {
             camera,
-            client_ui: UIFrame::new(Direction::TopToBottom),
             assets: Assets::new(),
+            client_uis: Vec::new(),
         }
     }
 }
@@ -139,9 +141,8 @@ impl ClientGameState {
         framebuffer: &mut Framebuffer,
         send_msg: &mut dyn FnMut(ClientMessage),
     ) {
-        let render_state = &mut self.local.render_state;
-
         let walk_frame = self.local.time_ms as usize / WALK_FRAME_DURATION;
+        let render_state = &mut self.local.render_state;
 
         // move camera to follow client
         let mut client_screen_position = self.client.position - render_state.camera;
@@ -174,103 +175,124 @@ impl ClientGameState {
             }
         }
 
-        // draw other players behind client
+        macro_rules! draw_client {
+            ($client: expr) => {
+                draw_client!($client, |_: &mut UIContext| {});
+            };
+            ($client: expr,  $additional_ui:expr) => {
+                let screen_position = $client.position - render_state.camera;
+
+                let ui = if let Some(ui) = render_state
+                    .client_uis
+                    .iter_mut()
+                    .find(|(id, _)| id == &$client.id())
+                    .map(|(_, ui)| ui)
+                {
+                    ui
+                } else {
+                    let ui = UIFrame::new(Direction::BottomToTop);
+                    render_state.client_uis.push(($client.id(), ui));
+                    &mut render_state.client_uis.last_mut().unwrap().1
+                };
+
+                // draw client
+                let client_image = render_state
+                    .assets
+                    .cibo
+                    .get_client_image(&$client, walk_frame);
+                framebuffer.draw_img(client_image, &screen_position);
+
+                // draw client chat
+                let client_ui_rect = Rect::new(
+                    Position::new(screen_position.x - 30, 0),
+                    Position::new(screen_position.x + 30 + 32, screen_position.y + 45),
+                );
+
+                ui.draw_frame(framebuffer, client_ui_rect, &mut self.local.input, |ui| {
+                    ui.margin(MarginMode::Grow);
+
+                    ui.label::<Glean>(&$client.name());
+
+                    ui.alloc_space(Dimension::new(0, 26));
+
+                    $additional_ui(ui);
+
+                    for chat in self
+                        .local
+                        .other_chat
+                        .iter()
+                        .rev()
+                        .filter(|c| c.client_id == $client.id())
+                    {
+                        let chat = ChatWidget::new(&chat.message, ui);
+                        ui.add(chat);
+                    }
+                });
+            };
+        }
+
+        // draw players behind client
         for client in self
             .game_state
             .clients
             .iter()
             .filter(|c| c.position.y <= self.client.position.y)
         {
-            let position = client.position - render_state.camera;
-
-            let image = render_state
-                .assets
-                .cibo
-                .get_client_image(client, walk_frame);
-            framebuffer.draw_img(image, &position);
+            draw_client!(client);
         }
 
-        // draw client
-        let client_image = render_state
-            .assets
-            .cibo
-            .get_client_image(&self.client, walk_frame);
-        framebuffer.draw_img(client_image, &client_screen_position);
-
-        // draw client chatbox
-        let client_ui_rect = Rect::new(
-            Position::new(
-                client_screen_position.x - 320,
-                client_screen_position.y - 20,
-            ),
-            Position::new(
-                client_screen_position.x + 320 + 32,
-                client_screen_position.y,
-            ),
-        );
-
-        render_state.client_ui.draw_frame(
-            framebuffer,
-            client_ui_rect,
-            &mut self.local.input,
-            |ui| {
-                if let Some(chat) = &mut self.local.own_chat {
-                    ui.margin(MarginMode::Grow);
-
-                    if ui.textbox(chat).submitted {
+        draw_client!(self.client, |ui: &mut UIContext| {
+            if let Some(chat) = &mut self.local.own_chat {
+                let textbox = widgets::Textbox::<Glean>::new(chat, ui).wrap(TextWrap::Everywhere);
+                if ui.add(textbox).submitted {
+                    if !chat.is_empty() {
                         send_msg(ClientMessage::Chat(chat.clone()));
-                        self.local.own_chat = None;
                     }
-                }
-            },
-        );
 
-        // draw other players in front of client
+                    self.local.own_chat = None;
+                }
+            }
+        });
+
+        // draw players in front of client
         for client in self
             .game_state
             .clients
             .iter()
             .filter(|c| c.position.y > self.client.position.y)
         {
-            let position = client.position - render_state.camera;
-
-            let image = render_state
-                .assets
-                .cibo
-                .get_client_image(client, walk_frame);
-
-            framebuffer.draw_img(image, &position);
+            draw_client!(client);
         }
 
         // draw chat messages
-        for chat in self.local.other_chat.iter() {
-            let client_position = if chat.client_id == self.client.id() {
-                self.client.position
-            } else {
-                if let Some(found_client) = self
-                    .game_state
-                    .clients
-                    .iter()
-                    .find(|c| c.id() == chat.client_id)
-                {
-                    found_client.position
-                } else {
-                    continue;
-                }
-            };
-
-            let position = client_position - render_state.camera;
-
-            let mut ui_frame = UIFrame::new_stateless(Direction::TopToBottom);
-            let ui_rect = Rect::new(
-                Position::new(position.x - 320, position.y - 20),
-                Position::new(position.x + 320 + 32, position.y),
-            );
-
-            ui_frame.draw_frame(framebuffer, ui_rect, &mut self.local.input, |ui| {
-                ui.margin(MarginMode::Grow);
-                ui.label(&chat.message);
-            });
-        }
+        // for chat in self.local.other_chat.iter() {
+        //     let client_position = if chat.client_id == self.client.id() {
+        //         self.client.position
+        //     } else {
+        //         if let Some(found_client) = self
+        //             .game_state
+        //             .clients
+        //             .iter()
+        //             .find(|c| c.id() == chat.client_id)
+        //         {
+        //             found_client.position
+        //         } else {
+        //             continue;
+        //         }
+        //     };
+        //
+        //     let position = client_position - render_state.camera;
+        //
+        //     let mut ui_frame = UIFrame::new_stateless(Direction::TopToBottom);
+        //     let ui_rect = Rect::new(
+        //         Position::new(position.x - 320, position.y - 20),
+        //         Position::new(position.x + 320 + 32, position.y),
+        //     );
+        //
+        //     ui_frame.draw_frame(framebuffer, ui_rect, &mut self.local.input, |ui| {
+        //         ui.margin(MarginMode::Grow);
+        //         ui.label::<Glean>(&chat.message);
+        //     });
+        // }
     }
 }

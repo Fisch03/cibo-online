@@ -1,3 +1,4 @@
+mod chat_widget;
 mod render;
 
 use crate::{
