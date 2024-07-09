@@ -8,7 +8,7 @@ use monos_gfx::{
     Framebuffer, Image,
 };
 
-const CAMERA_EDGE: i64 = 100;
+const CAMERA_EDGE: i64 = 75;
 const WALK_FRAME_DURATION: usize = 250;
 
 macro_rules! include_ppm {
@@ -77,6 +77,7 @@ impl Assets {
     }
 
     fn tile_from_coords(&self, x: i64, y: i64) -> &Image {
+        // cheap hash function for random-ish tile selection
         let h = x.wrapping_mul(374761393) + y.wrapping_mul(668265263);
         let h = (h ^ (h >> 13)) * 1274126177;
         let h = h ^ (h >> 16);
@@ -144,18 +145,18 @@ impl ClientGameState {
 
         // move camera to follow client
         let mut client_screen_position = self.client.position - render_state.camera;
-        if client_screen_position.x < CAMERA_EDGE {
-            render_state.camera.x = self.client.position.x - CAMERA_EDGE;
-            client_screen_position.x = CAMERA_EDGE;
+        if client_screen_position.x < CAMERA_EDGE - 32 {
+            render_state.camera.x = self.client.position.x - CAMERA_EDGE + 32;
+            client_screen_position.x = CAMERA_EDGE - 32;
         } else if client_screen_position.x > framebuffer.dimensions().width as i64 - CAMERA_EDGE {
             render_state.camera.x =
                 self.client.position.x - framebuffer.dimensions().width as i64 + CAMERA_EDGE;
             client_screen_position.x = framebuffer.dimensions().width as i64 - CAMERA_EDGE;
         }
 
-        if client_screen_position.y < CAMERA_EDGE {
-            render_state.camera.y = self.client.position.y - CAMERA_EDGE;
-            client_screen_position.y = CAMERA_EDGE;
+        if client_screen_position.y < CAMERA_EDGE - 32 {
+            render_state.camera.y = self.client.position.y - CAMERA_EDGE + 32;
+            client_screen_position.y = CAMERA_EDGE - 32;
         } else if client_screen_position.y > framebuffer.dimensions().height as i64 - CAMERA_EDGE {
             render_state.camera.y =
                 self.client.position.y - framebuffer.dimensions().height as i64 + CAMERA_EDGE;
@@ -200,7 +201,7 @@ impl ClientGameState {
         let client_ui_rect = Rect::new(
             Position::new(
                 client_screen_position.x - 320,
-                client_screen_position.y - 30,
+                client_screen_position.y - 20,
             ),
             Position::new(
                 client_screen_position.x + 320 + 32,
@@ -262,7 +263,7 @@ impl ClientGameState {
 
             let mut ui_frame = UIFrame::new_stateless(Direction::TopToBottom);
             let ui_rect = Rect::new(
-                Position::new(position.x - 320, position.y - 30),
+                Position::new(position.x - 320, position.y - 20),
                 Position::new(position.x + 320 + 32, position.y),
             );
 

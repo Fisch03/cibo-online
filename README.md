@@ -1,12 +1,14 @@
-# Cibo Online
-is a social hangout "game" where you can talk and interact with other players, inspired by the vtuber [Mono Monet](https://www.youtube.com/@MonoMonet) of V4Mirai (think: [Yume Nikki Online](ynoproject.net) but for tabemonos :3).
-Cibo Online is a part of [monOS](https://github.com/Fisch03/monOS/), but can also be played in the browser without any installation
+<p align="center">
+<img height="125" src="https://github.com/Fisch03/cibo-online/blob/master/assets/logo.png" />
+</p>
+
+is a social hangout "game" where you can talk and interact with other players, inspired by the vtuber [Mono Monet](https://www.youtube.com/@MonoMonet) of V4Mirai (think: [Yume Nikki Online](ynoproject.net) or [Become Fumo](https://www.roblox.com/games/6238705697/Become-Fumo) but for tabemonos :3).
+Cibo Online! is a part of monOS, the (heavily WIP) mono-themed operating system but can also be played in the browser without any installation
 
 ## project structure
 - [`cibo_online`](https://github.com/Fisch03/cibo-online/tree/master/cibo_online) provides most of the client functionality as well as shared definitions for client and server
 - [`server`](https://github.com/Fisch03/cibo-online/tree/master/server) contains the game server code
-- [`web_client`](https://github.com/Fisch03/cibo-online/tree/master/server) contains the webassembly client
-- the source for the client shipped with monOS is available in the monOS source tree [here](https://github.com/Fisch03/monOS/tree/master/userspace/cibo_online)
+- [`web_client`](https://github.com/Fisch03/cibo-online/tree/master/server) contains the wasm client source
 
 ## a few noteworthy things
 ### performance
@@ -26,6 +28,7 @@ i don't know why you'd wanna do that, but if you want to, its actually pretty si
 - a 640x480 linear framebuffer in the RGB(A)8 format (or any reordering - BGR8 or some other wacky variant will work just as fine)
 - some sort of (keyboard) input
 
+obtain a player name in whatever way you see fit.
 initialize a `monos_gfx::Framebuffer` using your framebuffer and connect to the servers websocket. 
 deserialize incoming messages into `ServerMessage`s. to connect to the server, send a serialized `ClientMessage::Connect` containing your requested player name. 
 your client will receive a `ServerMessage::FullState` as a response containing your clients initial state that you should save.
