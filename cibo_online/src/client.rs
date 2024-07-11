@@ -5,7 +5,7 @@ use crate::{
     game_state::MoveDirection, server::ServerMessage, Client, ClientAction, ClientId, GameState,
 };
 
-use alloc::{collections::VecDeque, string::String, vec::Vec};
+use alloc::{collections::VecDeque, format, string::String, vec::Vec};
 use monos_gfx::{
     input::{Input, Key, KeyEvent, KeyState, RawKey},
     Framebuffer,
@@ -42,11 +42,13 @@ pub struct ClientGameState {
 pub struct ClientLocalState {
     time_ms: u64,
     last_tick: u64,
+    last_message: u64,
 
     render_state: render::RenderState,
 
     own_chat: Option<String>,
     other_chat: VecDeque<ChatMessage>,
+    chat_log: VecDeque<String>,
 
     input: Input,
 }
@@ -111,6 +113,7 @@ impl ClientGameState {
                     Key::RawKey(RawKey::Return) | Key::Unicode('t')
                         if input.state == KeyState::Down =>
                     {
+                        direction = Some(MoveDirection::None);
                         self.local.own_chat = Some(String::new());
                     }
                     _ => {}
@@ -154,10 +157,22 @@ impl ClientGameState {
             }
         }
 
-        if client_action.any() {
+        let forced_update =
+            self.local.time_ms - self.local.last_message > crate::SERVER_TICK_RATE * 15;
+        let has_action = client_action.any();
+        if has_action || forced_update {
+            if forced_update && !has_action {
+                client_action.movement(self.client.position, self.client.movement);
+                self.local.last_message = self.local.time_ms;
+            }
+
             self.client.apply_action(&client_action);
             send_msg(ClientMessage::Action(client_action))
         }
+
+        // for client in self.game_state.clients.iter_mut() {
+        //     client.predict_movement(tick_amt);
+        // }
 
         self.local
             .other_chat
@@ -176,6 +191,7 @@ impl ClientGameState {
             }
             ServerMessage::ClientLeft(client_id) => {
                 self.game_state.clients.retain(|c| c.id() != client_id);
+                self.local.render_state.cleanup_client(&client_id);
             }
             ServerMessage::FullState(_) => {
                 panic!(
@@ -196,6 +212,27 @@ impl ClientGameState {
                 }
             }
             ServerMessage::Chat(client_id, message) => {
+                let client_name = self
+                    .game_state
+                    .clients
+                    .iter()
+                    .find(|c| c.id() == client_id)
+                    .map(|c| c.name())
+                    .unwrap_or_else(|| {
+                        if client_id == self.client.id() {
+                            "You"
+                        } else {
+                            "Unknown"
+                        }
+                    });
+
+                self.local
+                    .chat_log
+                    .push_back(format!("<{}> {}", client_name, message));
+                if self.local.chat_log.len() > 256 {
+                    self.local.chat_log.pop_front();
+                }
+
                 self.local.other_chat.push_back(ChatMessage {
                     client_id,
                     message,

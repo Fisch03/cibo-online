@@ -27,8 +27,15 @@ macro_rules! include_ppm {
 pub struct RenderState {
     camera: Position,
     client_uis: Vec<(ClientId, UIFrame)>,
+    chat_log: UIFrame,
 
     assets: Assets,
+}
+
+impl RenderState {
+    pub fn cleanup_client(&mut self, client_id: &ClientId) {
+        self.client_uis.retain(|(id, _)| id != client_id);
+    }
 }
 
 impl Default for RenderState {
@@ -39,6 +46,7 @@ impl Default for RenderState {
             camera,
             assets: Assets::new(),
             client_uis: Vec::new(),
+            chat_log: UIFrame::new(Direction::BottomToTop),
         }
     }
 }
@@ -264,35 +272,19 @@ impl ClientGameState {
             draw_client!(client);
         }
 
-        // draw chat messages
-        // for chat in self.local.other_chat.iter() {
-        //     let client_position = if chat.client_id == self.client.id() {
-        //         self.client.position
-        //     } else {
-        //         if let Some(found_client) = self
-        //             .game_state
-        //             .clients
-        //             .iter()
-        //             .find(|c| c.id() == chat.client_id)
-        //         {
-        //             found_client.position
-        //         } else {
-        //             continue;
-        //         }
-        //     };
-        //
-        //     let position = client_position - render_state.camera;
-        //
-        //     let mut ui_frame = UIFrame::new_stateless(Direction::TopToBottom);
-        //     let ui_rect = Rect::new(
-        //         Position::new(position.x - 320, position.y - 20),
-        //         Position::new(position.x + 320 + 32, position.y),
-        //     );
-        //
-        //     ui_frame.draw_frame(framebuffer, ui_rect, &mut self.local.input, |ui| {
-        //         ui.margin(MarginMode::Grow);
-        //         ui.label::<Glean>(&chat.message);
-        //     });
-        // }
+        let chat_log_rect = Rect::new(
+            Position::new(0, framebuffer.dimensions().height as i64 - 100),
+            Position::new(100, framebuffer.dimensions().height as i64),
+        );
+        render_state
+            .chat_log
+            .draw_frame(framebuffer, chat_log_rect, &mut self.local.input, |ui| {
+                for msg in self.local.chat_log.iter().rev() {
+                    ui.add(
+                        widgets::Label::<Glean>::new(msg)
+                            .wrap(TextWrap::Enabled { hyphenate: false }),
+                    );
+                }
+            });
     }
 }
