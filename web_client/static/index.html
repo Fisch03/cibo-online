@@ -74,6 +74,19 @@
                 requestAnimationFrame(render);
             }
 
+            window.addEventListener('mousemove', (event) => {
+                const bounds = canvas.getBoundingClientRect();
+                const x = Math.floor((event.clientX - bounds.left) / bounds.width * canvas.width );
+                const y = Math.floor((event.clientY - bounds.top) / bounds.height * canvas.height );
+                game.mouse_pos(x, y);
+            });
+
+            window.addEventListener('wheel', (event) => {
+                
+                const delta = Math.floor(event.deltaY / 50)
+                game.mouse_scroll(delta); 
+            });
+
             render();
 
         }

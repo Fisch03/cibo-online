@@ -10,31 +10,24 @@ Cibo Online! is a part of monOS, the (heavily WIP) mono-themed operating system 
 - [`server`](https://github.com/Fisch03/cibo-online/tree/master/server) contains the game server code
 - [`web_client`](https://github.com/Fisch03/cibo-online/tree/master/server) contains the wasm client source
 
-## a few noteworthy things
-### performance
+## a note about performance
 its horrible. i know. for maximum compatibility with the monOS version, i currently draw onto the raw framebuffer with zero gpu acceleration whatsoever. 
-this is obviously not a great idea and will be changed at some point (probably when i have the monOS version in place).
-
-### open source
-the two guides below are somewhat useless for the time being since not the whole source code is contained in this repository. 
-namely the graphics library, monos_gfx is part of the main OS repo that i am unable to open source for now due to spoiler reasons ;)
+this is obviously not a great idea and will be changed/optimized at some point (probably when i have the monOS version in place).
 
 ## hosting your own server
 should be a simple `cargo run` in the workspace root :) you will need to install [wasm-pack](https://rustwasm.github.io/wasm-pack/) first
 
 ## implementing your own client
-i don't know why you'd wanna do that, but if you want to, its actually pretty simple. there are basically only three things you need to provide:
+i don't know _why_ you'd wanna do that, but if you want to its actually pretty simple. there are basically only three things you need to provide:
 - some way of connecting to websockets
 - a 640x480 linear framebuffer in the RGB(A)8 format (or any reordering - BGR8 or some other wacky variant will work just as fine)
 - some sort of (keyboard) input
 
 obtain a player name in whatever way you see fit.
 initialize a `monos_gfx::Framebuffer` using your framebuffer and connect to the servers websocket. 
-deserialize incoming messages into `ServerMessage`s. to connect to the server, send a serialized `ClientMessage::Connect` containing your requested player name. 
+deserialize incoming messages into `ServerMessage`s. to join the server, send a serialized `ClientMessage::Connect` containing your requested player name. 
 your client will receive a `ServerMessage::FullState` as a response containing your clients initial state that you should save.
 every other type of `ServerMessage` you receive from that point on you can route straight into that saved state using its `handle_message` function.
-all your client needs to do now is each frame:
-- if needed `clear_alpha` the framebuffer and call the `update` function on your `ClientGameState` to process and draw the next frame
-- call the `add_input` function on your `ClientGameState` according to your platforms input
+all your client needs to do now is each frame is calling the `update` function on your `ClientGameState` to process and draw the next frame 
 
 thats it! you can look at the wasm implementation [here](https://github.com/Fisch03/cibo-online/blob/master/web_client/src/lib.rs) to get a better idea :)

@@ -3,8 +3,9 @@ use crate::game_state::{Client, ClientId, MoveDirection};
 use alloc::vec::Vec;
 
 use monos_gfx::{
-    font::Glean,
     image::SliceReader,
+    input::Input,
+    text::{font, Origin},
     types::*,
     ui::{widgets, Direction, MarginMode, TextWrap, UIContext, UIFrame},
     Framebuffer, Image,
@@ -147,6 +148,7 @@ impl ClientGameState {
     pub(super) fn render(
         &mut self,
         framebuffer: &mut Framebuffer,
+        input: &mut Input,
         send_msg: &mut dyn FnMut(ClientMessage),
     ) {
         let walk_frame = self.local.time_ms as usize / WALK_FRAME_DURATION;
@@ -212,14 +214,14 @@ impl ClientGameState {
 
                 // draw client chat
                 let client_ui_rect = Rect::new(
-                    Position::new(screen_position.x - 30, 0),
+                    Position::new(screen_position.x - 30, -i64::MAX),
                     Position::new(screen_position.x + 30 + 32, screen_position.y + 45),
                 );
 
-                ui.draw_frame(framebuffer, client_ui_rect, &mut self.local.input, |ui| {
+                ui.draw_frame(framebuffer, client_ui_rect, input, |ui| {
                     ui.margin(MarginMode::Grow);
 
-                    ui.label::<Glean>(&$client.name());
+                    ui.label::<font::Glean>(&$client.name());
 
                     ui.alloc_space(Dimension::new(0, 26));
 
@@ -231,9 +233,9 @@ impl ClientGameState {
                         .iter()
                         .rev()
                         .filter(|c| c.client_id == $client.id())
+                        .take(3)
                     {
-                        let chat = ChatWidget::new(&chat.message, ui);
-                        ui.add(chat);
+                        ui.add(ChatWidget::new(&chat.message));
                     }
                 });
             };
@@ -251,7 +253,8 @@ impl ClientGameState {
 
         draw_client!(self.client, |ui: &mut UIContext| {
             if let Some(chat) = &mut self.local.own_chat {
-                let textbox = widgets::Textbox::<Glean>::new(chat, ui).wrap(TextWrap::Everywhere);
+                let textbox = widgets::Textbox::<font::Glean>::new(chat)
+                    .wrap(TextWrap::Enabled { hyphenate: false });
                 if ui.add(textbox).submitted {
                     if !chat.is_empty() {
                         send_msg(ClientMessage::Chat(chat.clone()));
@@ -278,13 +281,15 @@ impl ClientGameState {
         );
         render_state
             .chat_log
-            .draw_frame(framebuffer, chat_log_rect, &mut self.local.input, |ui| {
-                for msg in self.local.chat_log.iter().rev() {
-                    ui.add(
-                        widgets::Label::<Glean>::new(msg)
-                            .wrap(TextWrap::Enabled { hyphenate: false }),
-                    );
-                }
+            .draw_frame(framebuffer, chat_log_rect, input, |ui| {
+                ui.add(
+                    widgets::ScrollableLabel::<font::Glean, _>::new_iter(
+                        self.local.chat_log.iter().map(|chat| chat.as_str()),
+                        Origin::Bottom,
+                    )
+                    .wrap(TextWrap::Enabled { hyphenate: false })
+                    .scroll_y(100),
+                );
             });
     }
 }

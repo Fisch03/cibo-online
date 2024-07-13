@@ -1,63 +1,58 @@
 use monos_gfx::{
-    font::Glean,
+    text::font,
     ui::{Deserialize, Lines, Serialize, TextWrap, UIContext, UIElement, UIResult},
     Color, Dimension, Position, Rect,
 };
 
 #[derive(Debug, Clone)]
 pub struct ChatWidget<'a> {
-    id: u64,
     text: &'a str,
-    state: ChatWidgetState,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChatWidgetState {
     size: u32,
     open: bool,
 }
 
 impl<'a> ChatWidget<'a> {
-    pub fn new(text: &'a str, context: &mut UIContext) -> Self {
-        let id = context.next_id_from_string(text);
-        let state = if let Some(state) = context.state_get(id) {
-            state
-        } else {
-            ChatWidgetState {
-                size: 0,
-                open: false,
-            }
-        };
-
-        Self { id, text, state }
+    pub fn new(text: &'a str) -> Self {
+        Self { text }
     }
 }
 
 impl UIElement for ChatWidget<'_> {
-    fn draw(mut self, context: &mut UIContext) -> UIResult {
+    fn draw(self, context: &mut UIContext) -> UIResult {
+        let id = context.next_id_from_string(self.text);
+        let mut state: ChatWidgetState = context.state_get(id).unwrap_or_default();
+
         let line_max_dimensions = Dimension::new(
             context.placer.max_width() - 2,
             context.fb.dimensions().height,
         );
-        let lines = Lines::<Glean>::layout(self.text, TextWrap::Everywhere, line_max_dimensions);
+        let lines = Lines::<font::Glean>::layout(
+            self.text,
+            TextWrap::Enabled { hyphenate: false },
+            line_max_dimensions,
+        );
         let line_dimensions = lines.dimensions();
 
         let dimensions = Dimension::new(line_dimensions.width + 2, line_dimensions.height + 4);
 
-        let mut result = context.placer.alloc_space(dimensions);
+        let mut result = context.alloc_space(dimensions);
         result.rect.max.y -= 2;
 
         let center_x = result.rect.center().x;
 
-        let drawn_rect = if self.state.open {
+        let drawn_rect = if state.open {
             result.rect
         } else {
-            self.state.size += 3;
-            let width = result.rect.width().min(self.state.size);
-            let height = result.rect.height().min(self.state.size);
+            state.size += 3;
+            let width = result.rect.width().min(state.size);
+            let height = result.rect.height().min(state.size);
 
             if width == result.rect.width() && height == result.rect.height() {
-                self.state.open = true;
+                state.open = true;
             }
 
             Rect::new(
@@ -128,12 +123,12 @@ impl UIElement for ChatWidget<'_> {
         );
         context.fb.draw_rect(&right_line, &Color::new(0, 0, 0));
 
-        if self.state.open {
+        if state.open {
             let lines_rect = Rect::centered_in(result.rect, line_dimensions);
             lines.draw(context.fb, lines_rect.min, Color::new(0, 0, 0));
         }
 
-        context.state_insert(self.id, self.state);
+        context.state_insert(id, state);
 
         result
     }

@@ -7,7 +7,7 @@ use crate::{
 
 use alloc::{collections::VecDeque, format, string::String, vec::Vec};
 use monos_gfx::{
-    input::{Input, Key, KeyEvent, KeyState, RawKey},
+    input::{Input, Key, KeyState, RawKey},
     Framebuffer,
 };
 use serde::{Deserialize, Serialize};
@@ -49,8 +49,6 @@ pub struct ClientLocalState {
     own_chat: Option<String>,
     other_chat: VecDeque<ChatMessage>,
     chat_log: VecDeque<String>,
-
-    input: Input,
 }
 
 #[derive(Debug, Clone)]
@@ -76,14 +74,11 @@ impl ClientGameState {
         self.client.apply_action(&action);
     }
 
-    pub fn add_input(&mut self, key_event: KeyEvent) {
-        self.local.input.keyboard.push_back(key_event);
-    }
-
     pub fn update(
         &mut self,
         delta_ms: u64,
         framebuffer: &mut Framebuffer,
+        input: &mut Input,
         send_msg: &mut dyn FnMut(ClientMessage),
     ) {
         self.local.time_ms += delta_ms;
@@ -94,7 +89,7 @@ impl ClientGameState {
         self.local.last_tick += tick_amt * crate::SERVER_TICK_RATE;
 
         if self.local.own_chat.is_none() {
-            while let Some(input) = self.local.input.keyboard.pop_front() {
+            while let Some(input) = input.keyboard.pop_front() {
                 let mut direction = None;
                 match input.key {
                     Key::RawKey(RawKey::ArrowUp) | Key::Unicode('w') => {
@@ -147,7 +142,7 @@ impl ClientGameState {
                 client_action.movement(position, self.client.movement)
             }
         } else {
-            for input in self.local.input.keyboard.iter() {
+            for input in input.keyboard.iter() {
                 match input.key {
                     Key::RawKey(RawKey::Escape) if input.state == KeyState::Down => {
                         self.local.own_chat = None;
@@ -178,9 +173,9 @@ impl ClientGameState {
             .other_chat
             .retain(|chat| chat.expiry > self.local.time_ms);
 
-        self.render(framebuffer, send_msg);
+        self.render(framebuffer, input, send_msg);
 
-        self.local.input.clear();
+        input.clear();
     }
 
     pub fn handle_message(&mut self, msg: ServerMessage) {

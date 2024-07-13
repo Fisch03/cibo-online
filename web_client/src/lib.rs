@@ -5,9 +5,9 @@ use cibo_online::{
     server::ServerMessage,
 };
 use monos_gfx::{
-    font::{Cozette, Glean},
     image::SliceReader,
     input::{Input, Key, KeyEvent, KeyState, RawKey},
+    text::font,
     ui::{self, UIFrame},
     Color, Dimension, Framebuffer, FramebufferFormat, Image, Position, Rect,
 };
@@ -106,21 +106,13 @@ impl Game {
         });
 
         // register input handlers
-        let game_state = local_state.game_state.clone();
         let input = local_state.input.clone();
         let on_keydown = Closure::<dyn FnMut(_)>::new(move |e: web_sys::KeyboardEvent| {
             if let Some(key) = js_key_to_key(&e.key()) {
-                if let Some(ref mut game_state) = *game_state.borrow_mut() {
-                    game_state.add_input(KeyEvent {
-                        key,
-                        state: KeyState::Down,
-                    });
-                } else {
-                    input.borrow_mut().keyboard.push_back(KeyEvent {
-                        key,
-                        state: KeyState::Down,
-                    });
-                }
+                input.borrow_mut().keyboard.push_back(KeyEvent {
+                    key,
+                    state: KeyState::Down,
+                });
             }
         });
         web_sys::window()
@@ -129,21 +121,13 @@ impl Game {
             .unwrap();
         on_keydown.forget();
 
-        let game_state = local_state.game_state.clone();
         let input = local_state.input.clone();
         let on_keyup = Closure::<dyn FnMut(_)>::new(move |e: web_sys::KeyboardEvent| {
             if let Some(key) = js_key_to_key(&e.key()) {
-                if let Some(ref mut game_state) = *game_state.borrow_mut() {
-                    game_state.add_input(KeyEvent {
-                        key,
-                        state: KeyState::Up,
-                    });
-                } else {
-                    input.borrow_mut().keyboard.push_back(KeyEvent {
-                        key,
-                        state: KeyState::Up,
-                    });
-                }
+                input.borrow_mut().keyboard.push_back(KeyEvent {
+                    key,
+                    state: KeyState::Up,
+                });
             }
         });
         web_sys::window()
@@ -210,17 +194,32 @@ impl Game {
         self.framebuffer.clear_alpha();
     }
 
+    pub fn mouse_pos(&mut self, x: i32, y: i32) {
+        let mouse = &mut self.local_state.input.borrow_mut().mouse;
+        mouse.position = Position::new(x as i64, y as i64);
+    }
+
+    pub fn mouse_scroll(&mut self, scroll: i32) {
+        let mouse = &mut self.local_state.input.borrow_mut().mouse;
+        mouse.scroll += scroll as i64;
+    }
+
     pub fn update(&mut self, delta_ms: f32) {
         let delta_ms = delta_ms.round() as u64;
         if let Some(ref mut game_state) = *self.local_state.game_state.borrow_mut() {
             // we are connected to the server and have received a game state.
             // let the game state handle the rest
-            game_state.update(delta_ms, &mut self.framebuffer, &mut |client_msg| {
-                self.local_state
-                    .ws
-                    .send_with_u8_array(&client_msg.to_bytes().unwrap())
-                    .unwrap();
-            });
+            game_state.update(
+                delta_ms,
+                &mut self.framebuffer,
+                &mut self.local_state.input.borrow_mut(),
+                &mut |client_msg| {
+                    self.local_state
+                        .ws
+                        .send_with_u8_array(&client_msg.to_bytes().unwrap())
+                        .unwrap();
+                },
+            );
         } else {
             // no game state was received yet, draw a menu to let the player enter their name
             let fb_rect = Rect::from_dimensions(self.framebuffer.dimensions());
@@ -247,9 +246,9 @@ impl Game {
                 |ui| {
                     ui.margin(ui::MarginMode::Grow);
 
-                    ui.label::<Cozette>("please enter a nickname!");
+                    ui.label::<font::Cozette>("please enter a nickname!");
                     if ui
-                        .textbox::<Cozette>(&mut self.local_state.name_input)
+                        .textbox::<font::Cozette>(&mut self.local_state.name_input)
                         .submitted
                     {
                         let client_msg = ClientMessage::Connect {
@@ -273,7 +272,7 @@ impl Game {
                 |ui| {
                     ui.margin(ui::MarginMode::Grow);
 
-                    ui.label::<Glean>("made with ♡ by sakanaa");
+                    ui.label::<font::Glean>("made with ♡ by sakanaa");
                 },
             );
 
