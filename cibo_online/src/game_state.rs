@@ -14,12 +14,17 @@ impl ClientId {
     pub fn new() -> Self {
         ClientId(CLIENT_ID.fetch_add(1, Ordering::SeqCst))
     }
+
+    pub fn as_u32(&self) -> u32 {
+        self.0
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Client {
     id: ClientId,
     name: String,
+    pub(crate) typing: bool,
     pub(crate) position: Position,
     pub(crate) movement: MoveDirection,
     pub(crate) look_direction: MoveDirection,
@@ -28,6 +33,7 @@ pub struct Client {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientAction {
     pub movement: Option<(Position, MoveDirection)>,
+    pub typing: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,20 +53,31 @@ impl Default for MoveDirection {
 
 impl ClientAction {
     pub fn new() -> Self {
-        ClientAction { movement: None }
+        ClientAction {
+            movement: None,
+            typing: None,
+        }
     }
 
     pub fn movement(&mut self, movement: Position, direction: MoveDirection) {
         self.movement = Some((movement, direction));
     }
 
+    pub fn typing(&mut self, typing: bool) {
+        self.typing = Some(typing);
+    }
+
     pub fn any(&self) -> bool {
-        self.movement.is_some()
+        self.movement.is_some() || self.typing.is_some()
     }
 
     pub(crate) fn combine(&mut self, action: &ClientAction) {
         if action.movement.is_some() {
             self.movement = action.movement;
+        }
+
+        if action.typing.is_some() {
+            self.typing = action.typing;
         }
     }
 }
@@ -70,6 +87,7 @@ impl Client {
         Client {
             id,
             name,
+            typing: false,
             position,
             movement: MoveDirection::None,
             look_direction: MoveDirection::None,
@@ -93,6 +111,10 @@ impl Client {
             if movement.1 != MoveDirection::None {
                 self.look_direction = movement.1;
             }
+        }
+
+        if let Some(typing) = action.typing {
+            self.typing = typing
         }
     }
 }

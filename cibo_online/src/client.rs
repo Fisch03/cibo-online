@@ -110,6 +110,7 @@ impl ClientGameState {
                     {
                         direction = Some(MoveDirection::None);
                         self.local.own_chat = Some(String::new());
+                        client_action.typing(true);
                     }
                     _ => {}
                 }
@@ -146,6 +147,7 @@ impl ClientGameState {
                 match input.key {
                     Key::RawKey(RawKey::Escape) if input.state == KeyState::Down => {
                         self.local.own_chat = None;
+                        client_action.typing(false);
                     }
                     _ => {}
                 }
@@ -158,6 +160,7 @@ impl ClientGameState {
         if has_action || forced_update {
             if forced_update && !has_action {
                 client_action.movement(self.client.position, self.client.movement);
+                client_action.typing(self.local.own_chat.is_some());
                 self.local.last_message = self.local.time_ms;
             }
 
@@ -207,19 +210,23 @@ impl ClientGameState {
                 }
             }
             ServerMessage::Chat(client_id, message) => {
-                let client_name = self
+                let client = self
                     .game_state
                     .clients
-                    .iter()
-                    .find(|c| c.id() == client_id)
-                    .map(|c| c.name())
-                    .unwrap_or_else(|| {
-                        if client_id == self.client.id() {
-                            "You"
-                        } else {
-                            "Unknown"
-                        }
-                    });
+                    .iter_mut()
+                    .find(|c| c.id() == client_id);
+
+                let client_name;
+                if let Some(client) = client {
+                    client.typing = false;
+                    client_name = client.name();
+                } else {
+                    if client_id == self.client.id() {
+                        client_name = "You";
+                    } else {
+                        client_name = "Unknown";
+                    }
+                };
 
                 self.local
                     .chat_log

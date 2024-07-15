@@ -7,6 +7,7 @@ use monos_gfx::{
 #[derive(Debug, Clone)]
 pub struct ChatWidget<'a> {
     text: &'a str,
+    custom_id: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -17,13 +18,28 @@ pub struct ChatWidgetState {
 
 impl<'a> ChatWidget<'a> {
     pub fn new(text: &'a str) -> Self {
-        Self { text }
+        Self {
+            text,
+            custom_id: None,
+        }
+    }
+
+    pub fn with_id(text: &'a str, id: &'a str) -> Self {
+        Self {
+            text,
+            custom_id: Some(id),
+        }
     }
 }
 
 impl UIElement for ChatWidget<'_> {
     fn draw(self, context: &mut UIContext) -> UIResult {
-        let id = context.next_id_from_string(self.text);
+        let id = if let Some(id) = self.custom_id {
+            context.next_id_from_string(id)
+        } else {
+            context.next_id_from_string(self.text)
+        };
+
         let mut state: ChatWidgetState = context.state_get(id).unwrap_or_default();
 
         let line_max_dimensions = Dimension::new(

@@ -1,6 +1,6 @@
 use super::{chat_widget::ChatWidget, ClientGameState, ClientMessage};
 use crate::game_state::{Client, ClientId, MoveDirection};
-use alloc::vec::Vec;
+use alloc::{format, vec::Vec};
 
 use monos_gfx::{
     image::SliceReader,
@@ -11,7 +11,7 @@ use monos_gfx::{
     Framebuffer, Image,
 };
 
-const CAMERA_EDGE: i64 = 75;
+const CAMERA_EDGE: i64 = 100;
 const WALK_FRAME_DURATION: usize = 250;
 
 macro_rules! include_ppm {
@@ -152,6 +152,13 @@ impl ClientGameState {
         send_msg: &mut dyn FnMut(ClientMessage),
     ) {
         let walk_frame = self.local.time_ms as usize / WALK_FRAME_DURATION;
+        let type_text = match walk_frame % 3 {
+            0 => ".",
+            1 => "..",
+            2 => "...",
+            _ => unreachable!(),
+        };
+
         let render_state = &mut self.local.render_state;
 
         // move camera to follow client
@@ -178,8 +185,8 @@ impl ClientGameState {
         let start_tile = render_state.camera / 16;
         let fb_tile_size = framebuffer.dimensions() / 16;
 
-        for x in start_tile.x - 1..start_tile.x + fb_tile_size.width as i64 + 1 {
-            for y in start_tile.y - 1..start_tile.y + fb_tile_size.height as i64 + 1 {
+        for x in start_tile.x - 1..start_tile.x + fb_tile_size.width as i64 + 2 {
+            for y in start_tile.y - 1..start_tile.y + fb_tile_size.height as i64 + 2 {
                 let position = Position::new(x * 16, y * 16) - render_state.camera;
                 framebuffer.draw_img(render_state.assets.tile_from_coords(x, y), &position);
             }
@@ -248,13 +255,21 @@ impl ClientGameState {
             .iter()
             .filter(|c| c.position.y <= self.client.position.y)
         {
-            draw_client!(client);
+            draw_client!(client, |ui: &mut UIContext| {
+                if client.typing {
+                    ui.add(ChatWidget::with_id(
+                        type_text,
+                        &format!("t_{}", client.id().as_u32()),
+                    ));
+                }
+            });
         }
 
         draw_client!(self.client, |ui: &mut UIContext| {
             if let Some(chat) = &mut self.local.own_chat {
                 let textbox = widgets::Textbox::<font::Glean>::new(chat)
-                    .wrap(TextWrap::Enabled { hyphenate: false });
+                    .wrap(TextWrap::Enabled { hyphenate: false })
+                    .char_limit(crate::MESSAGE_LIMIT);
                 if ui.add(textbox).submitted {
                     if !chat.is_empty() {
                         send_msg(ClientMessage::Chat(chat.clone()));
@@ -272,7 +287,14 @@ impl ClientGameState {
             .iter()
             .filter(|c| c.position.y > self.client.position.y)
         {
-            draw_client!(client);
+            draw_client!(client, |ui: &mut UIContext| {
+                if client.typing {
+                    ui.add(ChatWidget::with_id(
+                        type_text,
+                        &format!("t_{}", client.id().as_u32()),
+                    ));
+                }
+            });
         }
 
         let chat_log_rect = Rect::new(

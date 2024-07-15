@@ -8,7 +8,7 @@ use monos_gfx::{
     image::SliceReader,
     input::{Input, Key, KeyEvent, KeyState, RawKey},
     text::font,
-    ui::{self, UIFrame},
+    ui::{self, widgets::Textbox, UIFrame},
     Color, Dimension, Framebuffer, FramebufferFormat, Image, Position, Rect,
 };
 use wasm_bindgen::prelude::*;
@@ -96,7 +96,7 @@ impl Game {
         framebuffer.clear_alpha(); // set the alpha channel to be fully visible. we only need to do this once since the program itself does not modify the alpha channel
 
         let local_state = Box::new(LocalState {
-            ws: WebSocket::new(&format!("ws://{}/ws", server_host)).unwrap(),
+            ws: WebSocket::new(&format!("wss://{}/ws", server_host)).unwrap(),
             game_state: Rc::new(RefCell::new(None)),
             ui_frame: UIFrame::new(ui::Direction::TopToBottom),
             input: Rc::new(RefCell::new(Input::default())),
@@ -205,6 +205,9 @@ impl Game {
     }
 
     pub fn update(&mut self, delta_ms: f32) {
+        self.framebuffer.clear();
+        self.framebuffer.clear_alpha();
+
         let delta_ms = delta_ms.round() as u64;
         if let Some(ref mut game_state) = *self.local_state.game_state.borrow_mut() {
             // we are connected to the server and have received a game state.
@@ -247,10 +250,11 @@ impl Game {
                     ui.margin(ui::MarginMode::Grow);
 
                     ui.label::<font::Cozette>("please enter a nickname!");
-                    if ui
-                        .textbox::<font::Cozette>(&mut self.local_state.name_input)
-                        .submitted
-                    {
+
+                    let name_input =
+                        Textbox::<font::Cozette>::new(&mut self.local_state.name_input)
+                            .char_limit(cibo_online::NAME_LIMIT);
+                    if ui.add(name_input).submitted {
                         let client_msg = ClientMessage::Connect {
                             name: self.local_state.name_input.clone(),
                         };

@@ -77,7 +77,8 @@ impl<T> ServerGameState<T> {
 
     pub fn update(&mut self, client_id: ClientId, client_msg: ClientMessage) {
         match client_msg {
-            ClientMessage::Connect { name } => {
+            ClientMessage::Connect { mut name } => {
+                name.truncate(crate::NAME_LIMIT);
                 if self.game_state.clients.iter().any(|c| c.id() == client_id) {
                     return;
                 }
@@ -111,7 +112,8 @@ impl<T> ServerGameState<T> {
                     self.queued_moves.push((client_id, action));
                 }
             }
-            ClientMessage::Chat(message) => {
+            ClientMessage::Chat(mut message) => {
+                message.truncate(crate::MESSAGE_LIMIT);
                 self.notify_clients(ServerMessage::Chat(client_id, message), NotifyTarget::All)
             }
         }

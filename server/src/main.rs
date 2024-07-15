@@ -3,13 +3,15 @@ use axum::{
         connect_info::ConnectInfo,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
+    http::{HeaderMap, Response, StatusCode},
     response::IntoResponse,
     routing::get,
     Router,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use std::{
-    net::SocketAddr,
+    collections::HashSet,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::{LazyLock, Mutex},
 };
 use tokio::sync::mpsc;
@@ -19,6 +21,9 @@ use cibo_online::{
     client::ClientMessage,
     server::{ServerGameState, ServerMessage},
 };
+
+static CONNECTED_IPS: LazyLock<Mutex<HashSet<IpAddr>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
 
 static GAME_STATE: LazyLock<Mutex<ServerGameState<PerClientState>>> = LazyLock::new(|| {
     Mutex::new(ServerGameState::new(
@@ -77,7 +82,25 @@ async fn main() {
 async fn ws_handler(
     ws: WebSocketUpgrade,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
+    println!("{:?}", headers);
+
+    let ip = if let Some(ip) = headers.get("x-real-ip") {
+        ip.to_str().unwrap().parse().unwrap()
+    } else {
+        addr.ip()
+    };
+
+    if ip != IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)) {
+        let mut connected_ips = CONNECTED_IPS.lock().unwrap();
+        if !connected_ips.insert(addr.ip()) {
+            return Response::builder()
+                .status(StatusCode::FORBIDDEN)
+                .body("only one connection per IP allowed".into())
+                .unwrap();
+        }
+    }
     ws.on_upgrade(move |socket| handle_socket(socket, addr))
 }
 
@@ -140,4 +163,5 @@ async fn handle_socket(socket: WebSocket, client_addr: SocketAddr) {
     }
     println!("{} ({:?}): disconnected", client_addr, client_id);
     GAME_STATE.lock().unwrap().remove_client(client_id);
+    CONNECTED_IPS.lock().unwrap().remove(&client_addr.ip());
 }
