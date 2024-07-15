@@ -3,7 +3,7 @@
 </p>
 
 is a social hangout "game" where you can talk and interact with other players, inspired by the vtuber [Mono Monet](https://www.youtube.com/@MonoMonet) of V4Mirai (think: [Yume Nikki Online](ynoproject.net) or [Become Fumo](https://www.roblox.com/games/6238705697/Become-Fumo) but for tabemonos :3).
-Cibo Online! is a part of monOS, the (heavily WIP) mono-themed operating system but can also be played in the browser without any installation
+Cibo Online! is a part of [monOS](https://github.com/Fisch03/monOS), the (heavily WIP) mono-themed operating system but can also be played in the browser without any installation
 
 ## project structure
 - [`cibo_online`](https://github.com/Fisch03/cibo-online/tree/master/cibo_online) provides most of the client functionality as well as shared definitions for client and server

@@ -798,6 +798,7 @@ dependencies = [
 [[package]]
 name = "monos_gfx"
 version = "0.1.0"
+source = "git+https://github.com/Fisch03/monOS.git#6fa191958f8a88085c9d8a5f87ce3e0181ceb55c"
 dependencies = [
  "hashbrown",
  "monos_std",
@@ -811,6 +812,7 @@ dependencies = [
 [[package]]
 name = "monos_std"
 version = "0.1.0"
+source = "git+https://github.com/Fisch03/monOS.git#6fa191958f8a88085c9d8a5f87ce3e0181ceb55c"
 dependencies = [
  "arrayvec",
  "linked_list_allocator",
