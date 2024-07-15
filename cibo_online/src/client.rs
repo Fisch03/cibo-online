@@ -219,7 +219,11 @@ impl ClientGameState {
                 let client_name;
                 if let Some(client) = client {
                     client.typing = false;
-                    client_name = client.name();
+                    client_name = if client.name().is_empty() {
+                        "Anon"
+                    } else {
+                        &client.name()
+                    }
                 } else {
                     if client_id == self.client.id() {
                         client_name = "You";

@@ -27,6 +27,11 @@ macro_rules! console_log {
 
 #[wasm_bindgen]
 extern "C" {
+    fn alert(s: &str);
+}
+
+#[wasm_bindgen]
+extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
 }
@@ -164,7 +169,9 @@ impl Game {
         on_message.forget();
 
         let on_error = Closure::<dyn FnMut(_)>::new(move |e: ErrorEvent| {
-            console_log!("WebSocket error: {:?}", e);
+            alert("connection to server failed.\nyou might have already joined under this ip or you might be banned.");
+            console_log!("connection error: {:?}", e.error());
+            web_sys::window().unwrap().location().reload().unwrap();
         });
         local_state
             .ws

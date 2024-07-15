@@ -26,4 +26,5 @@ features = [
     "ErrorEvent",
     "KeyboardEvent",
     "WebSocket",
+    "Location"
 ]

@@ -9,3 +9,4 @@ tower-http = { version = "0.5", features = ["fs", "compression-gzip", "compressi
 tokio = { version = "1", features = ["full"] }
 futures = "0.3.30"
 cibo_online = { path = "../cibo_online" }
+notify-debouncer-mini = "0.4.1"

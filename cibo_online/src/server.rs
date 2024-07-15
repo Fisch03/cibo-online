@@ -3,7 +3,11 @@ use crate::{
     Client, ClientAction, ClientId, GameState,
 };
 
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
 use serde::{Deserialize, Serialize};
 
 pub struct ServerGameState<T> {
@@ -32,9 +36,7 @@ impl<T> ServerGameState<T> {
         }
     }
 
-    pub fn new_client(&mut self, data: T) -> ClientId {
-        let id = ClientId::new();
-
+    pub fn new_client(&mut self, id: ClientId, data: T) -> ClientId {
         self.client_mapping.push((id, data));
 
         id
@@ -79,6 +81,7 @@ impl<T> ServerGameState<T> {
         match client_msg {
             ClientMessage::Connect { mut name } => {
                 name.truncate(crate::NAME_LIMIT);
+                let name = name.trim().to_string();
                 if self.game_state.clients.iter().any(|c| c.id() == client_id) {
                     return;
                 }
