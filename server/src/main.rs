@@ -19,6 +19,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tower_http::{compression::CompressionLayer, services::ServeDir};
+use tracing::{error, info, span, warn, Instrument, Span};
 
 use cibo_online::{
     client::ClientMessage,
@@ -33,7 +34,7 @@ static GAME_STATE: LazyLock<Mutex<ServerGameState<PerClientState>>> = LazyLock::
     Mutex::new(ServerGameState::new(
         |client_state: &PerClientState, msg| {
             client_state.tx.try_send(msg).unwrap_or_else(|e| {
-                eprintln!("error sending message to client: {:?}", e);
+                error!("sending message to client: {:?}", e);
             });
         },
     ))
@@ -47,11 +48,11 @@ static BANNED_IPS: LazyLock<Mutex<HashSet<IpAddr>>> = LazyLock::new(|| Mutex::ne
 static BANNED_WORDS: LazyLock<Mutex<HashSet<String>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
-fn read_banned_ips() {
-    let banned_ips = match std::fs::read_to_string("../data/banned_ips.txt") {
+fn read_banned_ips(path: &Path) {
+    let banned_ips = match std::fs::read_to_string(path) {
         Ok(banned_ips) => banned_ips,
         Err(e) => {
-            eprintln!("error reading banned_ips.txt: {:?}", e);
+            error!("reading banned_ips.txt: {:?}", e);
             return;
         }
     };
@@ -60,42 +61,74 @@ fn read_banned_ips() {
         .filter_map(|line| {
             let res = line.parse().ok();
             if res.is_none() {
-                eprintln!("invalid IP in banned_ips.txt: {:?}", line);
+                warn!("invalid IP in banned_ips.txt: {:?}", line);
             }
 
             res
         })
-        .collect();
+        .collect::<HashSet<_>>();
 
-    println!("loaded banned IPs: {:?}", banned_ips);
+    info!("loaded {} banned IPs", banned_ips.len());
+
     let connected_ips = CONNECTED_IPS.lock().unwrap();
     for ip in &banned_ips {
         if let Some(client_id) = connected_ips.get(ip) {
+            info!("kicking client with banned IP: {:?}", ip);
             GAME_STATE.lock().unwrap().remove_client(*client_id);
+            CONNECTED_IPS.lock().unwrap().remove(ip);
         }
     }
 
     *BANNED_IPS.lock().unwrap() = banned_ips
 }
 
-fn read_banned_words() {
-    let banned_words = match std::fs::read_to_string("../data/banned_words.txt") {
+fn read_banned_words(path: &Path) {
+    let banned_words = match std::fs::read_to_string(path) {
         Ok(banned_words) => banned_words,
         Err(e) => {
-            eprintln!("error reading banned_words.txt: {:?}", e);
+            error!("reading banned_words.txt: {:?}", e);
             return;
         }
     };
     let banned_words = banned_words
         .lines()
         .map(|line| line.to_lowercase())
-        .collect();
-    println!("loaded banned words");
+        .collect::<HashSet<_>>();
+    info!("loaded {} banned words", banned_words.len());
     *BANNED_WORDS.lock().unwrap() = banned_words;
+}
+
+fn watch_config_file<P: AsRef<Path>, F: Fn(&Path) + Sync + Send + 'static>(path: P, handler: F) {
+    let path = path.as_ref().to_path_buf();
+
+    handler(&path);
+
+    let mut watcher = {
+        let path = path.clone();
+
+        new_debouncer(
+            Duration::from_secs(1),
+            move |res: DebounceEventResult| match res {
+                Ok(events) => events.iter().for_each(|_| {
+                    handler(&path);
+                }),
+                Err(e) => error!("watching banned_words.txt: {:?}", e),
+            },
+        )
+        .unwrap()
+    };
+
+    watcher
+        .watcher()
+        .watch(&path, RecursiveMode::NonRecursive)
+        .unwrap();
 }
 
 #[tokio::main]
 async fn main() {
+    let subscriber = tracing_subscriber::fmt().with_target(false).finish();
+    tracing::subscriber::set_global_default(subscriber).unwrap();
+
     let app = Router::new();
 
     if let Err(_) = std::fs::read_dir("./static") {
@@ -126,46 +159,13 @@ async fn main() {
         }
     });
 
-    read_banned_ips();
-    let mut banned_ips_watcher = new_debouncer(
-        Duration::from_secs(1),
-        |res: DebounceEventResult| match res {
-            Ok(events) => events.iter().for_each(|_| {
-                read_banned_ips();
-            }),
-            Err(e) => eprintln!("error watching banned_ips.txt: {:?}", e),
-        },
-    )
-    .unwrap();
+    watch_config_file("../data/banned_ips.txt", read_banned_ips);
+    watch_config_file("../data/banned_words.txt", read_banned_words);
 
-    read_banned_words();
-    let mut banned_words_watcher = new_debouncer(
-        Duration::from_secs(1),
-        |res: DebounceEventResult| match res {
-            Ok(events) => events.iter().for_each(|_| {
-                read_banned_words();
-            }),
-            Err(e) => eprintln!("error watching banned_words.txt: {:?}", e),
-        },
-    )
-    .unwrap();
-
-    banned_ips_watcher
-        .watcher()
-        .watch(
-            Path::new("../data/banned_ips.txt"),
-            RecursiveMode::NonRecursive,
-        )
-        .unwrap();
-
-    banned_words_watcher
-        .watcher()
-        .watch(
-            Path::new("../data/banned_words.txt"),
-            RecursiveMode::NonRecursive,
-        )
-        .unwrap();
-
+    info!(
+        "ready! listening on port {}",
+        listener.local_addr().unwrap().port()
+    );
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
@@ -235,102 +235,132 @@ async fn ws_handler(
             .unwrap();
     };
 
-    ws.on_upgrade(move |socket| handle_socket(socket, client_id, addr, actual_ip))
+    ws.on_upgrade(move |socket| handle_client(socket, client_id, addr, actual_ip))
 }
 
-async fn handle_socket(
+async fn handle_client(
     socket: WebSocket,
     client_id: ClientId,
     client_addr: SocketAddr,
     client_ip: Option<IpAddr>,
 ) {
-    let mut connected = false;
-    let (mut socket_tx, mut socket_rx) = socket.split();
-    let (client_tx, mut client_rx) = mpsc::channel(10);
+    let (client_tx, client_rx) = mpsc::channel(10);
+    let display_ip = client_ip.unwrap_or(client_addr.ip());
 
-    let client_id = GAME_STATE
-        .lock()
-        .unwrap()
-        .new_client(client_id, PerClientState { tx: client_tx });
+    let span = span!(tracing::Level::INFO, "client", id=client_id.as_u32(), ip = %display_ip, name = tracing::field::Empty);
 
-    println!(
-        "{} ({:?}): connected",
-        client_ip.unwrap_or(client_addr.ip()),
-        client_id
-    );
+    async move {
+        info!("connected");
 
-    let recv_task = tokio::spawn(async move {
-        while let Some(Ok(Message::Binary(msg))) = socket_rx.next().await {
-            let mut client_msg = match ClientMessage::from_bytes(&msg) {
-                Ok(client_msg) => client_msg,
-                Err(e) => {
-                    eprintln!("error deserializing client message: {:?}", e);
-                    continue;
-                }
-            };
+        GAME_STATE
+            .lock()
+            .unwrap()
+            .new_client(client_id, PerClientState { tx: client_tx });
+        handle_client_inner(client_id, socket, client_rx, client_ip).await;
 
-            match client_msg {
-                ClientMessage::Connect { ref mut name } => {
-                    let banned_words = BANNED_WORDS.lock().unwrap();
-                    let name_lower = name.to_lowercase();
-                    if banned_words.iter().any(|word| name_lower.contains(word)) {
-                        *name = "*****".to_string();
-                    }
-                }
-                ClientMessage::Chat(ref mut msg) => {
-                    println!(
-                        "{:?} ({:?}) says '{}'",
-                        client_ip.unwrap_or(client_addr.ip()),
-                        client_id,
-                        msg
-                    );
-
-                    let banned_words = BANNED_WORDS.lock().unwrap();
-                    let msg_lower = msg.to_lowercase();
-                    if banned_words.iter().any(|word| msg_lower.contains(word)) {
-                        client_msg = ClientMessage::Chat("*****".to_string());
-                    }
-                }
-                _ => (),
-            }
-
-            GAME_STATE.lock().unwrap().update(client_id, client_msg);
-        }
-    });
-
-    let send_task = tokio::spawn(async move {
-        while let Some(server_msg) = client_rx.recv().await {
-            let server_msg_bytes = match server_msg.to_bytes() {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    eprintln!("error serializing server message: {:?}", e);
-                    break;
-                }
-            };
-
-            match socket_tx.send(Message::Binary(server_msg_bytes)).await {
-                Ok(_) => (),
-                Err(_) => {
-                    break;
-                }
-            }
-        }
-    });
-
-    tokio::select! {
-        _ = recv_task => {
-        }
-        _ = send_task => {
-        }
+        info!("client disconnected");
     }
-    println!(
-        "{:?} ({:?}): disconnected",
-        client_ip.unwrap_or(client_addr.ip()),
-        client_id
-    );
+    .instrument(span)
+    .await;
 
     GAME_STATE.lock().unwrap().remove_client(client_id);
     if let Some(client_ip) = client_ip {
         CONNECTED_IPS.lock().unwrap().remove(&client_ip);
+    }
+}
+
+async fn handle_client_inner(
+    client_id: ClientId,
+    socket: WebSocket,
+    mut client_rx: mpsc::Receiver<ServerMessage>,
+    client_ip: Option<IpAddr>,
+) {
+    let (mut socket_tx, mut socket_rx) = socket.split();
+
+    let mut connected = false;
+
+    let recv_task = tokio::spawn(
+        async move {
+            while let Some(Ok(Message::Binary(msg))) = socket_rx.next().await {
+                if let Some(client_ip) = client_ip {
+                    if CONNECTED_IPS.lock().unwrap().get(&client_ip).is_none() {
+                        warn!("received message from disconnected client");
+                        break;
+                    }
+                }
+
+                let mut client_msg = match ClientMessage::from_bytes(&msg) {
+                    Ok(client_msg) => client_msg,
+                    Err(e) => {
+                        error!("deserializing message: {:?}", e);
+                        continue;
+                    }
+                };
+
+                if !matches!(client_msg, ClientMessage::Connect { .. }) && !connected {
+                    warn!("sent message before connecting");
+                    continue;
+                }
+
+                match client_msg {
+                    ClientMessage::Connect { ref mut name } => {
+                        if connected {
+                            warn!("tried to connect twice");
+                            continue;
+                        }
+
+                        let banned_words = BANNED_WORDS.lock().unwrap();
+                        let name_lower = name.to_lowercase();
+                        Span::current().record("name", &name.as_str());
+                        if banned_words.iter().any(|word| name_lower.contains(word)) {
+                            warn!("tried to connect with banned name");
+                            *name = "*****".to_string();
+                        }
+                        connected = true;
+                    }
+                    ClientMessage::Chat(ref mut msg) => {
+                        info!("says '{}'", msg);
+
+                        let banned_words = BANNED_WORDS.lock().unwrap();
+                        let msg_lower = msg.to_lowercase();
+                        if banned_words.iter().any(|word| msg_lower.contains(word)) {
+                            client_msg = ClientMessage::Chat("*****".to_string());
+                            warn!("tried to send banned word");
+                        }
+                    }
+                    _ => (),
+                }
+
+                GAME_STATE.lock().unwrap().update(client_id, client_msg);
+            }
+        }
+        .in_current_span(),
+    );
+
+    let send_task = tokio::spawn(
+        async move {
+            while let Some(server_msg) = client_rx.recv().await {
+                let server_msg_bytes = match server_msg.to_bytes() {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        error!("serializing message: {:?}", e);
+                        break;
+                    }
+                };
+
+                match socket_tx.send(Message::Binary(server_msg_bytes)).await {
+                    Ok(_) => (),
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+        }
+        .in_current_span(),
+    );
+
+    tokio::select! {
+        _ = recv_task => (),
+        _ = send_task => ()
     }
 }

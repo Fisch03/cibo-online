@@ -55,8 +55,8 @@ struct LocalState {
     game_logo: Image,
 }
 
-fn js_key_to_key(key: &str) -> Option<Key> {
-    match key {
+fn js_key_to_key(key: &str) -> Option<(Key, bool)> {
+    let key = match key {
         "ArrowUp" => Some(Key::RawKey(RawKey::ArrowUp)),
         "ArrowDown" => Some(Key::RawKey(RawKey::ArrowDown)),
         "ArrowLeft" => Some(Key::RawKey(RawKey::ArrowLeft)),
@@ -64,12 +64,20 @@ fn js_key_to_key(key: &str) -> Option<Key> {
         "Backspace" => Some(Key::RawKey(RawKey::Backspace)),
         "Escape" => Some(Key::RawKey(RawKey::Escape)),
         "Enter" => Some(Key::RawKey(RawKey::Return)),
+        "Tab" => Some(Key::RawKey(RawKey::Tab)),
         other if other.len() == 1 => {
             let char = other.chars().next().unwrap();
             Some(Key::Unicode(char))
         }
         _ => None,
-    }
+    };
+
+    let prevent_default = match key {
+        Some(Key::RawKey(_)) => true,
+        _ => false,
+    };
+
+    key.map(|key| (key, prevent_default))
 }
 
 #[wasm_bindgen]
@@ -100,8 +108,14 @@ impl Game {
         let mut framebuffer = Framebuffer::new(framebuffer, Dimension::new(width, height), format);
         framebuffer.clear_alpha(); // set the alpha channel to be fully visible. we only need to do this once since the program itself does not modify the alpha channel
 
+        let ws_protocol = if web_sys::window().unwrap().location().protocol().unwrap() == "https:" {
+            "wss"
+        } else {
+            "ws"
+        };
+
         let local_state = Box::new(LocalState {
-            ws: WebSocket::new(&format!("wss://{}/ws", server_host)).unwrap(),
+            ws: WebSocket::new(&format!("{}://{}/ws", ws_protocol, server_host)).unwrap(),
             game_state: Rc::new(RefCell::new(None)),
             ui_frame: UIFrame::new(ui::Direction::TopToBottom),
             input: Rc::new(RefCell::new(Input::default())),
@@ -113,11 +127,14 @@ impl Game {
         // register input handlers
         let input = local_state.input.clone();
         let on_keydown = Closure::<dyn FnMut(_)>::new(move |e: web_sys::KeyboardEvent| {
-            if let Some(key) = js_key_to_key(&e.key()) {
+            if let Some((key, prevent_default)) = js_key_to_key(&e.key()) {
                 input.borrow_mut().keyboard.push_back(KeyEvent {
                     key,
                     state: KeyState::Down,
                 });
+                if prevent_default {
+                    e.prevent_default();
+                }
             }
         });
         web_sys::window()
@@ -128,11 +145,14 @@ impl Game {
 
         let input = local_state.input.clone();
         let on_keyup = Closure::<dyn FnMut(_)>::new(move |e: web_sys::KeyboardEvent| {
-            if let Some(key) = js_key_to_key(&e.key()) {
+            if let Some((key, prevent_default)) = js_key_to_key(&e.key()) {
                 input.borrow_mut().keyboard.push_back(KeyEvent {
                     key,
                     state: KeyState::Up,
                 });
+                if prevent_default {
+                    e.prevent_default();
+                }
             }
         });
         web_sys::window()

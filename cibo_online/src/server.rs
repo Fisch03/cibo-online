@@ -36,10 +36,8 @@ impl<T> ServerGameState<T> {
         }
     }
 
-    pub fn new_client(&mut self, id: ClientId, data: T) -> ClientId {
+    pub fn new_client(&mut self, id: ClientId, data: T) {
         self.client_mapping.push((id, data));
-
-        id
     }
 
     pub fn remove_client(&mut self, client_id: ClientId) {
@@ -81,7 +79,11 @@ impl<T> ServerGameState<T> {
         match client_msg {
             ClientMessage::Connect { mut name } => {
                 name.truncate(crate::NAME_LIMIT);
-                let name = name.trim().to_string();
+                let mut name = name.trim().to_string();
+                if name.is_empty() {
+                    name = "Anon".to_string();
+                }
+
                 if self.game_state.clients.iter().any(|c| c.id() == client_id) {
                     return;
                 }

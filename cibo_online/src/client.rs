@@ -89,7 +89,7 @@ impl ClientGameState {
         self.local.last_tick += tick_amt * crate::SERVER_TICK_RATE;
 
         if self.local.own_chat.is_none() {
-            while let Some(input) = input.keyboard.pop_front() {
+            for input in &input.keyboard {
                 let mut direction = None;
                 match input.key {
                     Key::RawKey(RawKey::ArrowUp) | Key::Unicode('w') => {
@@ -141,6 +141,13 @@ impl ClientGameState {
                     MoveDirection::None => unreachable!(),
                 }
                 client_action.movement(position, self.client.movement)
+            }
+
+            // remove the return key from the input queue to avoid instantly closing the chat again
+            if self.local.own_chat.is_some() {
+                input
+                    .keyboard
+                    .retain(|k| k.key != Key::RawKey(RawKey::Return));
             }
         } else {
             for input in input.keyboard.iter() {
@@ -219,11 +226,7 @@ impl ClientGameState {
                 let client_name;
                 if let Some(client) = client {
                     client.typing = false;
-                    client_name = if client.name().is_empty() {
-                        "Anon"
-                    } else {
-                        &client.name()
-                    }
+                    client_name = client.name()
                 } else {
                     if client_id == self.client.id() {
                         client_name = "You";

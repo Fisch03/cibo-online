@@ -4,7 +4,7 @@ use alloc::{format, vec::Vec};
 
 use monos_gfx::{
     image::SliceReader,
-    input::Input,
+    input::{Input, Key, KeyState, RawKey},
     text::{font, Origin},
     types::*,
     ui::{widgets, Direction, MarginMode, TextWrap, UIContext, UIFrame},
@@ -29,6 +29,8 @@ pub struct RenderState {
     camera: Position,
     client_uis: Vec<(ClientId, UIFrame)>,
     chat_log: UIFrame,
+    coordinate_display: UIFrame,
+    player_list: Option<UIFrame>,
 
     assets: Assets,
 }
@@ -48,6 +50,8 @@ impl Default for RenderState {
             assets: Assets::new(),
             client_uis: Vec::new(),
             chat_log: UIFrame::new(Direction::BottomToTop),
+            coordinate_display: UIFrame::new_stateless(Direction::RightToLeft),
+            player_list: None,
         }
     }
 }
@@ -161,6 +165,16 @@ impl ClientGameState {
 
         let render_state = &mut self.local.render_state;
 
+        input.keyboard.iter().for_each(|input| {
+            if input.key == Key::RawKey(RawKey::Tab) {
+                if input.state == KeyState::Down {
+                    render_state.player_list = Some(UIFrame::new_stateless(Direction::TopToBottom));
+                } else {
+                    render_state.player_list = None;
+                }
+            }
+        });
+
         // move camera to follow client
         let mut client_screen_position = self.client.position - render_state.camera;
         if client_screen_position.x < CAMERA_EDGE - 32 {
@@ -248,13 +262,36 @@ impl ClientGameState {
             };
         }
 
-        // draw players behind client
-        for client in self
+        let mut clients = self
             .game_state
             .clients
             .iter()
-            .filter(|c| c.position.y <= self.client.position.y)
-        {
+            .map(|c| c)
+            .collect::<Vec<_>>();
+        clients.sort_unstable_by(|a, b| a.position.y.cmp(&b.position.y));
+
+        let mut drew_self = false;
+
+        for client in clients.iter() {
+            if !drew_self && client.position.y > self.client.position.y {
+                draw_client!(self.client, |ui: &mut UIContext| {
+                    if let Some(chat) = &mut self.local.own_chat {
+                        let textbox = widgets::Textbox::<font::Glean>::new(chat)
+                            .wrap(TextWrap::Enabled { hyphenate: false })
+                            .char_limit(crate::MESSAGE_LIMIT);
+                        if ui.add(textbox).submitted {
+                            if !chat.is_empty() {
+                                send_msg(ClientMessage::Chat(chat.clone()));
+                            }
+
+                            self.local.own_chat = None;
+                        }
+                    }
+                });
+
+                drew_self = true;
+            }
+
             draw_client!(client, |ui: &mut UIContext| {
                 if client.typing {
                     ui.add(ChatWidget::with_id(
@@ -265,34 +302,19 @@ impl ClientGameState {
             });
         }
 
-        draw_client!(self.client, |ui: &mut UIContext| {
-            if let Some(chat) = &mut self.local.own_chat {
-                let textbox = widgets::Textbox::<font::Glean>::new(chat)
-                    .wrap(TextWrap::Enabled { hyphenate: false })
-                    .char_limit(crate::MESSAGE_LIMIT);
-                if ui.add(textbox).submitted {
-                    if !chat.is_empty() {
-                        send_msg(ClientMessage::Chat(chat.clone()));
+        if !drew_self {
+            draw_client!(self.client, |ui: &mut UIContext| {
+                if let Some(chat) = &mut self.local.own_chat {
+                    let textbox = widgets::Textbox::<font::Glean>::new(chat)
+                        .wrap(TextWrap::Enabled { hyphenate: false })
+                        .char_limit(crate::MESSAGE_LIMIT);
+                    if ui.add(textbox).submitted {
+                        if !chat.is_empty() {
+                            send_msg(ClientMessage::Chat(chat.clone()));
+                        }
+
+                        self.local.own_chat = None;
                     }
-
-                    self.local.own_chat = None;
-                }
-            }
-        });
-
-        // draw players in front of client
-        for client in self
-            .game_state
-            .clients
-            .iter()
-            .filter(|c| c.position.y > self.client.position.y)
-        {
-            draw_client!(client, |ui: &mut UIContext| {
-                if client.typing {
-                    ui.add(ChatWidget::with_id(
-                        type_text,
-                        &format!("t_{}", client.id().as_u32()),
-                    ));
                 }
             });
         }
@@ -313,5 +335,44 @@ impl ClientGameState {
                     .scroll_y(100),
                 );
             });
+
+        let coordinate_rect = Rect::new(
+            Position::new(framebuffer.dimensions().width as i64 - 100, 0),
+            Position::new(framebuffer.dimensions().width as i64, 100),
+        );
+        let tile_position = self.client.position / 16;
+
+        render_state
+            .coordinate_display
+            .draw_frame(framebuffer, coordinate_rect, input, |ui| {
+                ui.label::<font::Glean>(&format!("X{} / Y{}", tile_position.x, tile_position.y));
+            });
+
+        if let Some(player_list) = &mut render_state.player_list {
+            let player_list_rect = Rect::new(
+                Position::new(framebuffer.dimensions().width as i64 / 2 - 100, 10),
+                Position::new(
+                    framebuffer.dimensions().width as i64 / 2 + 100,
+                    framebuffer.dimensions().height as i64 - 10,
+                ),
+            );
+            player_list.draw_frame(framebuffer, player_list_rect, input, |ui| {
+                ui.margin(MarginMode::Grow);
+                ui.label::<font::Cozette>(&format!(
+                    "Players Online: {}",
+                    self.game_state.clients.len() + 1
+                ));
+                ui.label::<font::Glean>("You");
+                for client in self.game_state.clients.iter() {
+                    let client_tile_position = client.position / 16;
+                    ui.label::<font::Glean>(&format!(
+                        "{} | X{} / Y{}",
+                        client.name(),
+                        client_tile_position.x,
+                        client_tile_position.y
+                    ));
+                }
+            });
+        }
     }
 }
