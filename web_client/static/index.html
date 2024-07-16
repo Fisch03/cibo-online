@@ -39,9 +39,10 @@
             const canvas = document.getElementById('GameCanvas');
             const wrapper = document.getElementById('CanvasWrapper');
 
-            let scale = 4, canvas_data, framebuffer;
+            let scale = 4, framebuffer;
             let game = Game.new(location.host, window.innerWidth / scale, window.innerHeight / scale);
             const ctx = canvas.getContext('2d', { alpha: false });
+            let canvas_data = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
             function resize() {
                 const scale_x = window.innerWidth / 480; 
@@ -70,6 +71,11 @@
                 last_time = now;
                 game.update(dt);
 
+                if (canvas_data.data.length !== framebuffer.length) {
+                    resize();
+                    requestAnimationFrame(render);
+                    return;
+                }
                 canvas_data.data.set(framebuffer);
                 ctx.putImageData(canvas_data, 0, 0);
                 requestAnimationFrame(render);
