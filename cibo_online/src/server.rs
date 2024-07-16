@@ -51,9 +51,6 @@ impl<T> ServerGameState<T> {
     }
 
     pub fn tick(&mut self) {
-        self.queued_moves
-            .sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
-
         if self.queued_moves.is_empty() {
             return;
         }
@@ -65,11 +62,7 @@ impl<T> ServerGameState<T> {
 
         let mut clients = self.game_state.clients.iter_mut();
         for queued in self.queued_moves.drain(..) {
-            while let Some(client) = clients.next() {
-                if client.id() != queued.0 {
-                    continue;
-                }
-
+            if let Some(client) = clients.find(|c| c.id() == queued.0) {
                 client.apply_action(&queued.1);
             }
         }
