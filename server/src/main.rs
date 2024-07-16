@@ -44,6 +44,9 @@ struct PerClientState {
 }
 
 static BANNED_IPS: LazyLock<Mutex<HashSet<IpAddr>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+static BANNED_WORDS: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
 fn read_banned_ips() {
     let banned_ips = match std::fs::read_to_string("../data/banned_ips.txt") {
         Ok(banned_ips) => banned_ips,
@@ -73,6 +76,22 @@ fn read_banned_ips() {
     }
 
     *BANNED_IPS.lock().unwrap() = banned_ips
+}
+
+fn read_banned_words() {
+    let banned_words = match std::fs::read_to_string("../data/banned_words.txt") {
+        Ok(banned_words) => banned_words,
+        Err(e) => {
+            eprintln!("error reading banned_words.txt: {:?}", e);
+            return;
+        }
+    };
+    let banned_words = banned_words
+        .lines()
+        .map(|line| line.to_lowercase())
+        .collect();
+    println!("loaded banned words");
+    *BANNED_WORDS.lock().unwrap() = banned_words;
 }
 
 #[tokio::main]
@@ -119,6 +138,18 @@ async fn main() {
     )
     .unwrap();
 
+    read_banned_words();
+    let mut banned_words_watcher = new_debouncer(
+        Duration::from_secs(1),
+        |res: DebounceEventResult| match res {
+            Ok(events) => events.iter().for_each(|_| {
+                read_banned_words();
+            }),
+            Err(e) => eprintln!("error watching banned_words.txt: {:?}", e),
+        },
+    )
+    .unwrap();
+
     banned_ips_watcher
         .watcher()
         .watch(
@@ -127,7 +158,13 @@ async fn main() {
         )
         .unwrap();
 
-    // read_banned_ips();
+    banned_words_watcher
+        .watcher()
+        .watch(
+            Path::new("../data/banned_words.txt"),
+            RecursiveMode::NonRecursive,
+        )
+        .unwrap();
 
     axum::serve(
         listener,
@@ -207,6 +244,7 @@ async fn handle_socket(
     client_addr: SocketAddr,
     client_ip: Option<IpAddr>,
 ) {
+    let mut connected = false;
     let (mut socket_tx, mut socket_rx) = socket.split();
     let (client_tx, mut client_rx) = mpsc::channel(10);
 
@@ -223,7 +261,7 @@ async fn handle_socket(
 
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(Message::Binary(msg))) = socket_rx.next().await {
-            let client_msg = match ClientMessage::from_bytes(&msg) {
+            let mut client_msg = match ClientMessage::from_bytes(&msg) {
                 Ok(client_msg) => client_msg,
                 Err(e) => {
                     eprintln!("error deserializing client message: {:?}", e);
@@ -232,13 +270,26 @@ async fn handle_socket(
             };
 
             match client_msg {
-                ClientMessage::Chat(ref msg) => {
+                ClientMessage::Connect { ref mut name } => {
+                    let banned_words = BANNED_WORDS.lock().unwrap();
+                    let name_lower = name.to_lowercase();
+                    if banned_words.iter().any(|word| name_lower.contains(word)) {
+                        *name = "*****".to_string();
+                    }
+                }
+                ClientMessage::Chat(ref mut msg) => {
                     println!(
                         "{:?} ({:?}) says '{}'",
                         client_ip.unwrap_or(client_addr.ip()),
                         client_id,
                         msg
                     );
+
+                    let banned_words = BANNED_WORDS.lock().unwrap();
+                    let msg_lower = msg.to_lowercase();
+                    if banned_words.iter().any(|word| msg_lower.contains(word)) {
+                        client_msg = ClientMessage::Chat("*****".to_string());
+                    }
                 }
                 _ => (),
             }
