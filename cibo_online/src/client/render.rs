@@ -1,4 +1,4 @@
-use super::{chat_widget::ChatWidget, ClientGameState, ClientMessage};
+use super::{chat_widget::ChatWidget, ClientGameState, ClientMessage, ClientLocalState};
 use crate::game_state::{Client, ClientId, MoveDirection};
 use alloc::{format, vec::Vec};
 
@@ -157,7 +157,9 @@ impl ClientGameState {
         input: &mut Input,
         send_msg: &mut dyn FnMut(ClientMessage),
     ) {
-        let walk_frame = self.local.time_ms as usize / WALK_FRAME_DURATION;
+        let local = self.local.get_or_insert_with(|| ClientLocalState::default());
+
+        let walk_frame = local.time_ms as usize / WALK_FRAME_DURATION;
         let type_text = match walk_frame % 3 {
             0 => ".",
             1 => "..",
@@ -165,7 +167,7 @@ impl ClientGameState {
             _ => unreachable!(),
         };
 
-        let render_state = &mut self.local.render_state;
+        let render_state = &mut local.render_state;
 
         input.keyboard.iter().for_each(|input| match input.key {
             Key::RawKey(RawKey::Tab) => {
@@ -263,8 +265,8 @@ impl ClientGameState {
 
                     $additional_ui(ui);
 
-                    for chat in self
-                        .local
+                    for chat in 
+                        local
                         .other_chat
                         .iter()
                         .rev()
@@ -290,7 +292,7 @@ impl ClientGameState {
         for client in clients.iter() {
             if !drew_self && client.position.y > self.client.position.y {
                 draw_client!(self.client, |ui: &mut UIContext| {
-                    if let Some(chat) = &mut self.local.own_chat {
+                    if let Some(chat) = &mut local.own_chat {
                         let textbox = widgets::Textbox::<font::Glean>::new(chat)
                             .wrap(TextWrap::Enabled { hyphenate: false })
                             .char_limit(crate::MESSAGE_LIMIT);
@@ -299,7 +301,7 @@ impl ClientGameState {
                                 send_msg(ClientMessage::Chat(chat.clone()));
                             }
 
-                            self.local.own_chat = None;
+                            local.own_chat = None;
                         }
                     }
                 });
@@ -319,7 +321,7 @@ impl ClientGameState {
 
         if !drew_self {
             draw_client!(self.client, |ui: &mut UIContext| {
-                if let Some(chat) = &mut self.local.own_chat {
+                if let Some(chat) = &mut local.own_chat {
                     let textbox = widgets::Textbox::<font::Glean>::new(chat)
                         .wrap(TextWrap::Enabled { hyphenate: false })
                         .char_limit(crate::MESSAGE_LIMIT);
@@ -328,7 +330,7 @@ impl ClientGameState {
                             send_msg(ClientMessage::Chat(chat.clone()));
                         }
 
-                        self.local.own_chat = None;
+                        local.own_chat = None;
                     }
                 }
             });
@@ -347,7 +349,7 @@ impl ClientGameState {
             .draw_frame(framebuffer, chat_log_rect, input, |ui| {
                 ui.add(
                     widgets::ScrollableLabel::<font::Glean, _>::new_iter(
-                        self.local.chat_log.iter().map(|chat| chat.as_str()),
+                        local.chat_log.iter().map(|chat| chat.as_str()),
                         Origin::Bottom,
                     )
                     .wrap(TextWrap::Enabled { hyphenate: false })

@@ -35,7 +35,7 @@ pub struct ClientGameState {
     game_state: GameState,
 
     #[serde(skip)]
-    local: ClientLocalState,
+    local: Option<ClientLocalState>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -66,8 +66,13 @@ impl ClientGameState {
             client,
             game_state,
 
-            local: ClientLocalState::default(),
+            local: None,
         }
+    }
+
+    #[inline(always)]
+    fn local(&mut self) -> &mut ClientLocalState {
+        self.local.get_or_insert_with(|| ClientLocalState::default())
     }
 
     pub fn handle_action(&mut self, action: ClientAction) {
@@ -81,14 +86,16 @@ impl ClientGameState {
         input: &mut Input,
         send_msg: &mut dyn FnMut(ClientMessage),
     ) {
-        self.local.time_ms += delta_ms;
+        let local = self.local.get_or_insert_with(|| ClientLocalState::default());
+
+        local.time_ms += delta_ms;
 
         let mut client_action = ClientAction::new();
 
-        let tick_amt = (self.local.time_ms - self.local.last_tick) / crate::SERVER_TICK_RATE;
-        self.local.last_tick += tick_amt * crate::SERVER_TICK_RATE;
+        let tick_amt = (local.time_ms - local.last_tick) / crate::SERVER_TICK_RATE;
+        local.last_tick += tick_amt * crate::SERVER_TICK_RATE;
 
-        if self.local.own_chat.is_none() {
+        if local.own_chat.is_none() {
             for input in &input.keyboard {
                 let mut direction = None;
                 match input.key {
@@ -109,7 +116,7 @@ impl ClientGameState {
                         if input.state == KeyState::Down =>
                     {
                         direction = Some(MoveDirection::None);
-                        self.local.own_chat = Some(String::new());
+                        local.own_chat = Some(String::new());
                         client_action.typing(true);
                     }
                     _ => {}
@@ -144,7 +151,7 @@ impl ClientGameState {
             }
 
             // remove the return key from the input queue to avoid instantly closing the chat again
-            if self.local.own_chat.is_some() {
+            if local.own_chat.is_some() {
                 input
                     .keyboard
                     .retain(|k| k.key != Key::RawKey(RawKey::Return));
@@ -153,7 +160,7 @@ impl ClientGameState {
             for input in input.keyboard.iter() {
                 match input.key {
                     Key::RawKey(RawKey::Escape) if input.state == KeyState::Down => {
-                        self.local.own_chat = None;
+                        local.own_chat = None;
                         client_action.typing(false);
                     }
                     _ => {}
@@ -162,13 +169,13 @@ impl ClientGameState {
         }
 
         let forced_update =
-            self.local.time_ms - self.local.last_message > crate::SERVER_TICK_RATE * 15;
+            local.time_ms - local.last_message > crate::SERVER_TICK_RATE * 15;
         let has_action = client_action.any();
         if has_action || forced_update {
             if forced_update && !has_action {
                 client_action.movement(self.client.position, self.client.movement);
-                client_action.typing(self.local.own_chat.is_some());
-                self.local.last_message = self.local.time_ms;
+                client_action.typing(local.own_chat.is_some());
+                local.last_message = local.time_ms;
             }
 
             self.client.apply_action(&client_action);
@@ -179,9 +186,9 @@ impl ClientGameState {
         //     client.predict_movement(tick_amt);
         // }
 
-        self.local
+        local
             .other_chat
-            .retain(|chat| chat.expiry > self.local.time_ms);
+            .retain(|chat| chat.expiry > local.time_ms);
 
         self.render(framebuffer, input, send_msg);
 
@@ -196,7 +203,7 @@ impl ClientGameState {
             }
             ServerMessage::ClientLeft(client_id) => {
                 self.game_state.clients.retain(|c| c.id() != client_id);
-                self.local.render_state.cleanup_client(&client_id);
+                self.local().render_state.cleanup_client(&client_id);
             }
             ServerMessage::FullState(_) => {
                 panic!(
@@ -230,17 +237,18 @@ impl ClientGameState {
                     }
                 };
 
-                self.local
+                let local = self.local.get_or_insert_with(|| ClientLocalState::default());
+                local
                     .chat_log
                     .push_back(format!("<{}> {}", client_name, message));
-                if self.local.chat_log.len() > 256 {
-                    self.local.chat_log.pop_front();
+                if local.chat_log.len() > 256 {
+                    local.chat_log.pop_front();
                 }
 
-                self.local.other_chat.push_back(ChatMessage {
+                local.other_chat.push_back(ChatMessage {
                     client_id,
                     message,
-                    expiry: self.local.time_ms + 5000,
+                    expiry: local.time_ms + 5000,
                 });
             }
         }
