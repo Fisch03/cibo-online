@@ -1,4 +1,10 @@
-use super::{chat_widget::ChatWidget, ClientGameState, ClientLocalState, ClientMessage};
+mod chat_widget;
+use chat_widget::ChatWidget;
+
+//mod sprite;
+//use sprite::Sprite;
+
+use super::{ClientGameState, ClientMessage, ClientLocalState};
 use crate::game_state::{Client, ClientId, MoveDirection};
 use alloc::{format, vec::Vec};
 
@@ -17,7 +23,7 @@ const WALK_FRAME_DURATION: usize = 250;
 macro_rules! include_ppm {
     ($file:expr) => {
         Image::from_ppm(&SliceReader::new(include_bytes!(concat!(
-            "../../../assets/",
+            "../../../../assets/",
             $file
         ))))
         .expect(concat!("Failed to load ", $file))
@@ -226,9 +232,6 @@ impl ClientGameState {
         }
 
         macro_rules! draw_client {
-            ($client: expr) => {
-                draw_client!($client, |_: &mut UIContext| {});
-            };
             ($client: expr,  $additional_ui:expr) => {
                 let screen_position = $client.position - render_state.camera;
 
@@ -284,7 +287,6 @@ impl ClientGameState {
             .game_state
             .clients
             .iter()
-            .map(|c| c)
             .collect::<Vec<_>>();
         clients.sort_unstable_by(|a, b| a.position.y.cmp(&b.position.y));
 
