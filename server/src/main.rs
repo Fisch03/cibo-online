@@ -258,7 +258,7 @@ async fn handle_client(
             .new_client(client_id, PerClientState { tx: client_tx });
         handle_client_inner(client_id, socket, client_rx, client_ip).await;
 
-        info!("client disconnected");
+        info!("disconnected");
     }
     .instrument(span)
     .await;
@@ -312,6 +312,7 @@ async fn handle_client_inner(
                         let banned_words = BANNED_WORDS.lock().unwrap();
                         let name_lower = name.to_lowercase();
                         Span::current().record("name", &name.as_str());
+                        info!("fully connected");
                         if banned_words.iter().any(|word| name_lower.contains(word)) {
                             warn!("tried to connect with banned name");
                             *name = "*****".to_string();

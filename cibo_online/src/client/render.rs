@@ -31,6 +31,7 @@ pub struct RenderState {
     chat_log: UIFrame,
     coordinate_display: UIFrame,
     player_list: Option<UIFrame>,
+    stream_mode: bool,
 
     assets: Assets,
 }
@@ -52,6 +53,7 @@ impl Default for RenderState {
             chat_log: UIFrame::new(Direction::BottomToTop),
             coordinate_display: UIFrame::new_stateless(Direction::RightToLeft),
             player_list: None,
+            stream_mode: false,
         }
     }
 }
@@ -165,15 +167,26 @@ impl ClientGameState {
 
         let render_state = &mut self.local.render_state;
 
-        input.keyboard.iter().for_each(|input| {
-            if input.key == Key::RawKey(RawKey::Tab) {
-                if input.state == KeyState::Down {
-                    render_state.player_list = Some(UIFrame::new_stateless(Direction::TopToBottom));
+        input.keyboard.iter().for_each(|input| match input.key {
+            Key::RawKey(RawKey::Tab) => {
+                render_state.player_list = if input.state == KeyState::Down {
+                    Some(UIFrame::new_stateless(Direction::TopToBottom))
                 } else {
-                    render_state.player_list = None;
+                    None
                 }
             }
+            Key::RawKey(RawKey::F1) if input.state == KeyState::Down => {
+                render_state.stream_mode = !render_state.stream_mode;
+            }
+            _ => {}
         });
+
+        if render_state.stream_mode {
+            framebuffer.draw_rect(
+                &Rect::from_dimensions(framebuffer.dimensions()),
+                &Color::new(0, 255, 0),
+            );
+        }
 
         // move camera to follow client
         let mut client_screen_position = self.client.position - render_state.camera;
@@ -199,10 +212,12 @@ impl ClientGameState {
         let start_tile = render_state.camera / 16;
         let fb_tile_size = framebuffer.dimensions() / 16;
 
-        for x in start_tile.x - 1..start_tile.x + fb_tile_size.width as i64 + 2 {
-            for y in start_tile.y - 1..start_tile.y + fb_tile_size.height as i64 + 2 {
-                let position = Position::new(x * 16, y * 16) - render_state.camera;
-                framebuffer.draw_img(render_state.assets.tile_from_coords(x, y), &position);
+        if !render_state.stream_mode {
+            for x in start_tile.x - 1..start_tile.x + fb_tile_size.width as i64 + 2 {
+                for y in start_tile.y - 1..start_tile.y + fb_tile_size.height as i64 + 2 {
+                    let position = Position::new(x * 16, y * 16) - render_state.camera;
+                    framebuffer.draw_img(render_state.assets.tile_from_coords(x, y), &position);
+                }
             }
         }
 
@@ -317,6 +332,10 @@ impl ClientGameState {
                     }
                 }
             });
+        }
+
+        if render_state.stream_mode {
+            return;
         }
 
         let chat_log_rect = Rect::new(

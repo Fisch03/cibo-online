@@ -65,6 +65,7 @@ fn js_key_to_key(key: &str) -> Option<(Key, bool)> {
         "Escape" => Some(Key::RawKey(RawKey::Escape)),
         "Enter" => Some(Key::RawKey(RawKey::Return)),
         "Tab" => Some(Key::RawKey(RawKey::Tab)),
+        "F1" => Some(Key::RawKey(RawKey::F1)),
         other if other.len() == 1 => {
             let char = other.chars().next().unwrap();
             Some(Key::Unicode(char))
@@ -295,7 +296,6 @@ impl Game {
             );
 
             let mut credits_frame = UIFrame::new_stateless(ui::Direction::BottomToTop);
-
             credits_frame.draw_frame(
                 &mut self.framebuffer,
                 fb_rect,
@@ -304,6 +304,20 @@ impl Game {
                     ui.margin(ui::MarginMode::Grow);
 
                     ui.label::<font::Glean>("made with ♡ by sakanaa");
+                },
+            );
+
+            let mut controls_frame = UIFrame::new_stateless(ui::Direction::BottomToTop);
+            controls_frame.draw_frame(
+                &mut self.framebuffer,
+                fb_rect,
+                &mut self.local_state.input.borrow_mut(),
+                |ui| {
+                    ui.label::<font::Glean>("- f1 to enter 'stream mode'");
+                    ui.label::<font::Glean>("- tab to view player list");
+                    ui.label::<font::Glean>("- enter or t to chat");
+                    ui.label::<font::Glean>("- arrow keys or w/a/s/d to move");
+                    ui.label::<font::Glean>("controls:");
                 },
             );
 

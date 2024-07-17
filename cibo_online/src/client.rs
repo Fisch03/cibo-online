@@ -204,14 +204,9 @@ impl ClientGameState {
                 );
             }
             ServerMessage::UpdateState(updates) => {
-                let mut clients = self.game_state.clients.iter_mut();
-
                 for (id, action) in updates {
-                    while let Some(client) = clients.next() {
-                        if client.id() != id {
-                            continue;
-                        }
-
+                    if let Some(client) = self.game_state.clients.iter_mut().find(|c| c.id() == id)
+                    {
                         client.apply_action(&action);
                     }
                 }
