@@ -278,6 +278,7 @@ impl Game {
                     ui.margin(ui::MarginMode::Grow);
 
                     ui.label::<font::Cozette>("please enter a nickname!");
+                    ui.label::<font::Glean>("(or leave empty to join anonymously)");
 
                     let name_input =
                         Textbox::<font::Cozette>::new(&mut self.local_state.name_input)
