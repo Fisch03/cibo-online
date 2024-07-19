@@ -1,9 +1,14 @@
-use core::sync::atomic::{AtomicU32, Ordering};
-use serde::{Deserialize, Serialize};
+mod render;
+pub use render::ClientLocal;
+pub(crate) use render::{OwnClient, OwnClientLocal};
+
+mod state;
+pub use state::ClientGameState;
 
 use alloc::{string::String, vec::Vec};
-
+use core::sync::atomic::{AtomicU32, Ordering};
 use monos_gfx::Position;
+use serde::{Deserialize, Serialize};
 
 static CLIENT_ID: AtomicU32 = AtomicU32::new(0);
 
@@ -17,6 +22,23 @@ impl ClientId {
 
     pub fn as_u32(&self) -> u32 {
         self.0
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ClientMessage {
+    Connect { name: String },
+    Action(ClientAction),
+    Chat(String),
+}
+
+impl ClientMessage {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
+        postcard::from_bytes(bytes)
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
+        postcard::to_allocvec(self)
     }
 }
 
@@ -83,7 +105,7 @@ impl ClientAction {
 }
 
 impl Client {
-    pub fn new(id: ClientId, name: String, position: Position) -> Self {
+    pub const fn new(id: ClientId, name: String, position: Position) -> Self {
         Client {
             id,
             name,
@@ -95,7 +117,7 @@ impl Client {
     }
 
     #[inline]
-    pub fn id(&self) -> ClientId {
+    pub const fn id(&self) -> ClientId {
         self.id
     }
 
@@ -136,18 +158,5 @@ impl PartialOrd for Client {
 impl Ord for Client {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.id.cmp(&other.id)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct GameState {
-    pub(crate) clients: Vec<Client>,
-}
-
-impl GameState {
-    pub fn new() -> Self {
-        GameState {
-            clients: Vec::new(),
-        }
     }
 }

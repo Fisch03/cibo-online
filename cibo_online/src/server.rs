@@ -1,6 +1,6 @@
 use crate::{
     client::{ClientGameState, ClientMessage},
-    Client, ClientAction, ClientId, GameState,
+    Client, ClientAction, ClientId, WorldState,
 };
 
 use alloc::{
@@ -11,7 +11,7 @@ use alloc::{
 use serde::{Deserialize, Serialize};
 
 pub struct ServerGameState<T> {
-    game_state: GameState,
+    world: WorldState,
     notify_client: Box<dyn Fn(&T, ServerMessage) + Send + Sync>,
     client_mapping: Vec<(ClientId, T)>,
     queued_moves: Vec<(ClientId, ClientAction)>,
@@ -29,7 +29,7 @@ impl<T> ServerGameState<T> {
         F: Fn(&T, ServerMessage) + Send + Sync + 'static,
     {
         ServerGameState {
-            game_state: GameState::new(),
+            world: WorldState::new(),
             notify_client: Box::new(notify_client),
             client_mapping: Vec::new(),
             queued_moves: Vec::new(),
@@ -42,7 +42,7 @@ impl<T> ServerGameState<T> {
 
     pub fn remove_client(&mut self, client_id: ClientId) {
         self.client_mapping.retain(|(id, _)| *id != client_id);
-        self.game_state.clients.retain(|c| c.id() != client_id);
+        self.world.clients.retain(|c| c.id() != client_id);
 
         self.notify_clients(
             ServerMessage::ClientLeft(client_id),
@@ -60,7 +60,7 @@ impl<T> ServerGameState<T> {
             NotifyTarget::All,
         );
 
-        let mut clients = self.game_state.clients.iter_mut();
+        let mut clients = self.world.clients.iter_mut();
         for queued in self.queued_moves.drain(..) {
             if let Some(client) = clients.find(|c| c.id() == queued.0) {
                 client.apply_action(&queued.1);
@@ -77,22 +77,17 @@ impl<T> ServerGameState<T> {
                     name = "Anon".to_string();
                 }
 
-                if self.game_state.clients.iter().any(|c| c.id() == client_id) {
+                if self.world.clients.iter().any(|c| c.id() == client_id) {
                     return;
                 }
 
                 let client = Client::new(client_id, name, Default::default());
+                self.world.clients.push(client.clone());
 
                 self.notify_clients(
-                    ServerMessage::FullState(ClientGameState::new(
-                        client.clone(),
-                        self.game_state.clone(),
-                    )),
+                    ServerMessage::FullState(ClientGameState::new(client_id, self.world.clone())),
                     NotifyTarget::Only(client_id),
                 );
-
-                self.game_state.clients.push(client.clone());
-                self.game_state.clients.sort_unstable();
 
                 self.notify_clients(
                     ServerMessage::NewClient(client),
