@@ -1,7 +1,8 @@
 use super::RenderContext;
 use crate::client::{Client, ClientLocal, OwnClient, OwnClientLocal};
+use crate::RectExt;
 
-use alloc::{boxed::Box, rc::Rc};
+use alloc::rc::Rc;
 use core::cell::RefCell;
 use monos_gfx::{Dimension, Image, Position, Rect};
 
@@ -27,32 +28,50 @@ impl ZOrder {
     // }
 }
 
-/// objects that can be converted into a sprite. this conversion should be as cheap as possible.
-pub trait AsSprite: core::fmt::Debug {
+/// properties of an object that need to be known in advance.
+#[derive(Debug, Clone)]
+pub struct ObjectProperties {
+    pub position: Position,
+    pub dimensions: Dimension,
+    pub rel_hitbox: Option<Rect>,
+    pub rel_bounds: Rect,
+    pub interactable: bool,
+}
+
+/// objects that can be converted into a sprite and has a hitbox.
+pub trait Object
+where
+    Self: Renderable<LocalState = ()> + core::fmt::Debug,
+{
     fn as_sprite(&self) -> Sprite;
-    fn position(&self) -> Position {
-        self.as_sprite().position()
+
+    fn properties(&self) -> &ObjectProperties;
+
+    fn interacts_with(&self, pos: Position) -> bool {
+        if !self.properties().interactable {
+            return false;
+        }
+
+        self.hitbox()
+            .unwrap_or_else(|| self.bounds())
+            .interactable(pos)
     }
 
-    fn dimensions(&self) -> Dimension {
-        self.as_sprite().dimensions()
-    }
-
-    /// get the hitbox of this object relative to its position.
-    fn hitbox_rel(&self) -> Option<Rect> {
-        let dimension = self.dimensions();
-        Some(Rect::new(
-            Position::zero(),
-            Position::from_dimensions(dimension),
-        ))
-    }
-
-    /// get the hitbox of this object in world.
-    ///
-    /// you should implement `hitbox_rel` instead.
+    /// get the hitbox of this object in world space.
+    #[inline]
     fn hitbox(&self) -> Option<Rect> {
-        self.hitbox_rel()
-            .map(|hitbox| hitbox.translate(self.position()))
+        let properties = self.properties();
+        properties
+            .rel_hitbox
+            .map(|hitbox| hitbox.translate(properties.position))
+    }
+
+    /// get the bounds of this object in world space.
+    #[inline]
+    fn bounds(&self) -> Rect {
+        self.properties()
+            .rel_bounds
+            .translate(self.properties().position)
     }
 }
 
@@ -60,14 +79,10 @@ pub trait AsSprite: core::fmt::Debug {
 pub enum Sprite<'a> {
     Client(&'a Client, Rc<RefCell<ClientLocal>>),
     OwnClient(OwnClient<'a>, Rc<RefCell<OwnClientLocal>>),
+    Object(&'a dyn Object),
     Static {
         position: Position,
         image: &'a Image,
-    },
-    Dynamic {
-        position: Position,
-        dimension: Dimension,
-        on_render: Option<Box<dyn FnOnce(&mut RenderContext) -> Image>>,
     },
 }
 
@@ -83,8 +98,8 @@ impl<'a> Sprite<'a> {
     pub const fn dimensions(&self) -> Dimension {
         match self {
             Self::Client(_, _) | Self::OwnClient(_, _) => Dimension::new(32, 32),
+            Self::Object(object) => object.properties().dimensions,
             Self::Static { image, .. } => image.dimensions(),
-            Self::Dynamic { dimension, .. } => *dimension,
         }
     }
 
@@ -93,7 +108,8 @@ impl<'a> Sprite<'a> {
         match self {
             Self::Client(client, _) => client.position,
             Self::OwnClient(client, _) => client.0.position,
-            Self::Static { position, .. } | Self::Dynamic { position, .. } => *position,
+            Self::Object(object) => object.properties().position,
+            Self::Static { position, .. } => *position,
         }
     }
 
@@ -101,20 +117,9 @@ impl<'a> Sprite<'a> {
         match self {
             Self::Client(client, local) => client.render(&mut local.borrow_mut(), camera, ctx),
             Self::OwnClient(client, local) => client.render(&mut local.borrow_mut(), camera, ctx),
+            Self::Object(object) => object.render(&mut (), camera, ctx),
             Self::Static { position, image } => {
                 ctx.fb.draw_img(image, &(*position - camera));
-            }
-            Self::Dynamic {
-                position,
-                on_render,
-                ..
-            } => {
-                if let Some(on_render) = on_render.take() {
-                    let image = on_render(ctx);
-                    ctx.fb.draw_img(&image, &(*position - camera));
-                } else {
-                    panic!("Dynamic sprite was rendered twice");
-                }
             }
         }
     }

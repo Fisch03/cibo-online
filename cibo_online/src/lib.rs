@@ -7,8 +7,10 @@ extern crate alloc;
 mod world;
 use world::{WorldLocalState, WorldState};
 
-pub mod render;
-use render::{AsSprite, Assets, RenderContext, Renderable, Sprite};
+mod render;
+use render::{
+    widgets, Assets, Object, ObjectProperties, RectExt, RenderContext, Renderable, Sprite,
+};
 
 pub mod client;
 pub use client::{Client, ClientAction, ClientId};

@@ -3,7 +3,7 @@ mod objects;
 use crate::{
     assets,
     client::{ClientLocal, OwnClient, OwnClientLocal},
-    AsSprite, Client, ClientId, RenderContext, Renderable, Sprite,
+    Client, ClientId, Object, RenderContext, Renderable, Sprite,
 };
 
 use alloc::{boxed::Box, rc::Rc, string::String, vec, vec::Vec};
@@ -29,7 +29,7 @@ pub(crate) struct WorldLocalState {
     pub(crate) own_id: ClientId,
     pub(crate) own_local: Rc<RefCell<OwnClientLocal>>,
     pub(crate) clients: Vec<(ClientId, Rc<RefCell<ClientLocal>>)>,
-    pub(crate) objects: Vec<Box<dyn AsSprite>>,
+    pub(crate) objects: Vec<Box<dyn Object>>,
 }
 
 impl WorldLocalState {

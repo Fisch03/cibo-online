@@ -240,7 +240,6 @@ impl Game {
         if let Some(ref mut game_state) = *self.local_state.game_state.borrow_mut() {
             // we are connected to the server and have received a game state.
             // let the game state handle the rest
-            console_log!("{:#?}", self.local_state.input.borrow().keyboard);
             game_state.update(
                 delta_ms,
                 &mut self.framebuffer,
@@ -252,6 +251,7 @@ impl Game {
                         .unwrap();
                 },
             );
+            // console_log!("{:#?}", game_state.client());
         } else {
             // no game state was received yet, draw a menu to let the player enter their name
             let fb_rect = Rect::from_dimensions(self.framebuffer.dimensions());

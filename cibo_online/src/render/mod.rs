@@ -1,11 +1,13 @@
 mod renderable;
-pub use renderable::{AsSprite, Renderable, Sprite};
+pub use renderable::{Object, ObjectProperties, Renderable, Sprite};
 
 mod assets;
 pub use assets::Assets;
 
+pub mod widgets;
+
 use crate::client::ClientMessage;
-use monos_gfx::{Framebuffer, Input, Position};
+use monos_gfx::{Framebuffer, Input, Position, Rect};
 
 pub struct RenderContext<'a, 'f> {
     pub fb: &'a mut Framebuffer<'f>,
@@ -17,7 +19,21 @@ pub struct RenderContext<'a, 'f> {
 }
 
 impl<'a> RenderContext<'a, '_> {
+    #[inline(always)]
     pub fn anim_frame(&self) -> usize {
         self.time_ms as usize / crate::BASE_ANIM_SPEED
+    }
+}
+
+pub trait RectExt {
+    fn interactable(&self, pos: Position) -> bool;
+}
+
+impl RectExt for Rect {
+    fn interactable(&self, pos: Position) -> bool {
+        pos.x > self.min.x - 16
+            && pos.x < self.max.x - 16
+            && pos.y > self.max.y - 30
+            && pos.y < self.max.y + 10
     }
 }

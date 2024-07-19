@@ -53,9 +53,15 @@ pub struct Client {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+enum ClientActionMovement {
+    Move(Position, MoveDirection),
+    Look(MoveDirection),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientAction {
-    pub movement: Option<(Position, MoveDirection)>,
-    pub typing: Option<bool>,
+    movement: Option<ClientActionMovement>,
+    typing: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,7 +88,16 @@ impl ClientAction {
     }
 
     pub fn movement(&mut self, movement: Position, direction: MoveDirection) {
-        self.movement = Some((movement, direction));
+        self.movement = Some(ClientActionMovement::Move(movement, direction));
+    }
+
+    pub fn look(&mut self, direction: MoveDirection) {
+        match self.movement {
+            Some(ClientActionMovement::Move(_, ref mut d)) => {
+                *d = direction;
+            }
+            _ => self.movement = Some(ClientActionMovement::Look(direction)),
+        }
     }
 
     pub fn typing(&mut self, typing: bool) {
@@ -95,7 +110,15 @@ impl ClientAction {
 
     pub(crate) fn combine(&mut self, action: &ClientAction) {
         if action.movement.is_some() {
-            self.movement = action.movement;
+            match action.movement {
+                Some(ClientActionMovement::Move(movement, direction)) => {
+                    self.movement(movement, direction);
+                }
+                Some(ClientActionMovement::Look(direction)) => {
+                    self.look(direction);
+                }
+                _ => {}
+            }
         }
 
         if action.typing.is_some() {
@@ -127,11 +150,18 @@ impl Client {
     }
 
     pub fn apply_action(&mut self, action: &ClientAction) {
-        if let Some(movement) = action.movement {
-            self.position = movement.0;
-            self.movement = movement.1;
-            if movement.1 != MoveDirection::None {
-                self.look_direction = movement.1;
+        if let Some(movement) = &action.movement {
+            match movement {
+                ClientActionMovement::Move(movement, direction) => {
+                    self.position = *movement;
+                    self.movement = *direction;
+                    if *direction != MoveDirection::None {
+                        self.look_direction = *direction;
+                    }
+                }
+                ClientActionMovement::Look(direction) => {
+                    self.look_direction = *direction;
+                }
             }
         }
 

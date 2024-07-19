@@ -1,8 +1,5 @@
-mod chat_widget;
-use chat_widget::ChatWidget;
-
 use super::{Client, ClientMessage};
-use crate::{assets, RenderContext, Renderable};
+use crate::{assets, widgets::ChatWidget, RenderContext, Renderable};
 use alloc::{collections::VecDeque, format, string::String};
 
 use monos_gfx::{

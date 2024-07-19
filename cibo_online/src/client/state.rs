@@ -6,11 +6,13 @@ use monos_gfx::{
     input::{Input, Key, KeyState, RawKey},
     text::{font, Origin, TextWrap},
     ui::{widgets, Direction, MarginMode, UIFrame},
-    Framebuffer, Position, Rect,
+    Edge, Framebuffer, Position, Rect,
 };
 use serde::{Deserialize, Serialize};
 
-const CAMERA_EDGE: i64 = 100;
+const CAMERA_EDGE_X: i64 = 100;
+const CAMERA_EDGE_Y: i64 = 50;
+const INTERACTABLE_FOCUS_SPEED: i64 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientGameState {
@@ -95,7 +97,7 @@ impl ClientGameState {
     }
 
     #[inline(always)]
-    fn client(&self) -> &Client {
+    pub fn client(&self) -> &Client {
         self.world.clients.first().unwrap()
     }
 
@@ -119,10 +121,6 @@ impl ClientGameState {
         self.local.as_mut().unwrap()
     }
 
-    pub fn handle_action(&mut self, action: ClientAction) {
-        self.client_mut().apply_action(&action);
-    }
-
     pub fn update(
         &mut self,
         delta_ms: u64,
@@ -139,87 +137,43 @@ impl ClientGameState {
         let tick_amt = (self.local().time_ms - self.local().last_tick) / crate::SERVER_TICK_RATE;
         self.local_mut().last_tick += tick_amt * crate::SERVER_TICK_RATE;
 
-        if self
-            .local()
-            .world
-            .own_local
-            .borrow_mut()
-            .chat_input
-            .is_none()
-        {
+        let mut direction = match self.client().movement {
+            MoveDirection::None => None,
+            direction => Some(direction),
+        };
+
+        if self.local().world.own_local.borrow().chat_input.is_none() {
             for input in &input.keyboard {
-                let mut direction = None;
-                match input.key {
-                    Key::RawKey(RawKey::ArrowUp) | Key::Unicode('w') => {
-                        direction = Some(MoveDirection::Up)
-                    }
-                    Key::RawKey(RawKey::ArrowDown) | Key::Unicode('s') => {
-                        direction = Some(MoveDirection::Down)
-                    }
-                    Key::RawKey(RawKey::ArrowLeft) | Key::Unicode('a') => {
-                        direction = Some(MoveDirection::Left)
-                    }
+                let button_direction = match input.key {
+                    Key::RawKey(RawKey::ArrowUp) | Key::Unicode('w') => Some(MoveDirection::Up),
+                    Key::RawKey(RawKey::ArrowDown) | Key::Unicode('s') => Some(MoveDirection::Down),
+                    Key::RawKey(RawKey::ArrowLeft) | Key::Unicode('a') => Some(MoveDirection::Left),
                     Key::RawKey(RawKey::ArrowRight) | Key::Unicode('d') => {
-                        direction = Some(MoveDirection::Right)
+                        Some(MoveDirection::Right)
                     }
 
                     Key::RawKey(RawKey::Return) | Key::Unicode('t')
                         if input.state == KeyState::Down =>
                     {
-                        direction = Some(MoveDirection::None);
                         self.local().world.own_local.borrow_mut().chat_input = Some(String::new());
                         client_action.typing(true);
+                        Some(MoveDirection::None)
                     }
-                    _ => {}
-                }
+                    _ => None,
+                };
 
-                if let Some(direction) = direction {
+                if let Some(button_direction) = button_direction {
                     match input.state {
                         KeyState::Down => {
-                            self.client_mut().movement = direction;
+                            direction = Some(button_direction);
                         }
                         KeyState::Up => {
-                            if self.client().movement == direction {
-                                self.client_mut().movement = MoveDirection::None;
-                                client_action.movement(self.client().position, MoveDirection::None);
+                            if direction == Some(button_direction) {
+                                direction = Some(MoveDirection::None);
                             }
                         }
                         _ => {}
                     }
-                }
-            }
-
-            if self.client().movement != MoveDirection::None {
-                let mut position = self.client().position;
-                match self.client().movement {
-                    MoveDirection::Up => position.y -= 1 * tick_amt as i64,
-                    MoveDirection::Down => position.y += 1 * tick_amt as i64,
-                    MoveDirection::Left => position.x -= 1 * tick_amt as i64,
-                    MoveDirection::Right => position.x += 1 * tick_amt as i64,
-                    MoveDirection::None => unreachable!(),
-                }
-
-                let own_hitbox = Rect::new(
-                    Position::new(position.x + 2, position.y + 12),
-                    Position::new(position.x + 30, position.y + 32),
-                );
-                // let own_hitbox = Rect::new(
-                //     Position::new(position.x + 2, position.y + 1),
-                //     Position::new(position.x + 30, position.y + 31),
-                // );
-                // TODO: optimize this by only checking objects that are close (if needed?)
-                let mut collision = false;
-                for object in self.local().world.objects.iter() {
-                    if let Some(hitbox) = object.hitbox() {
-                        if hitbox.intersects(&own_hitbox) {
-                            collision = true;
-                            break;
-                        }
-                    }
-                }
-
-                if !collision {
-                    client_action.movement(position, self.client().movement)
                 }
             }
 
@@ -248,6 +202,75 @@ impl ClientGameState {
             }
         }
 
+        let checked_pos = match direction {
+            Some(MoveDirection::None) => {
+                client_action.movement(self.client().position, MoveDirection::None);
+                None
+            }
+            Some(direction) => {
+                let mut position = self.client().position;
+                match direction {
+                    MoveDirection::Up => position.y -= 1 * tick_amt as i64,
+                    MoveDirection::Down => position.y += 1 * tick_amt as i64,
+                    MoveDirection::Left => position.x -= 1 * tick_amt as i64,
+                    MoveDirection::Right => position.x += 1 * tick_amt as i64,
+                    MoveDirection::None => unreachable!(),
+                }
+
+                Some(position)
+            }
+            _ => None,
+        };
+        let own_hitbox = checked_pos.map(|pos| {
+            Rect::new(
+                Position::new(pos.x + 2, pos.y + 12),
+                Position::new(pos.x + 30, pos.y + 32),
+            )
+        });
+
+        let mut camera = self.local().render.camera;
+        let camera_rect = Rect::new(
+            Position::new(camera.x, camera.y),
+            Position::new(
+                camera.x + framebuffer.dimensions().width as i64,
+                camera.y + framebuffer.dimensions().height as i64,
+            ),
+        );
+
+        let mut collision = false;
+        for object in &self.local().world.objects {
+            // collide with objects
+            if let Some(object_hitbox) = object.hitbox() {
+                match own_hitbox {
+                    Some(ref own_hitbox) if !collision => {
+                        if object_hitbox.intersects(own_hitbox) {
+                            collision = true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            // if an interactable object only partially visible, nudge the camera to show it
+            if object.interacts_with(self.client().position) {
+                match object.bounds().intersects_edge(&camera_rect) {
+                    Some(Edge::Top) => camera.y -= 1,
+                    Some(Edge::Bottom) => camera.y += 1,
+                    Some(Edge::Left) => camera.x -= 1,
+                    Some(Edge::Right) => camera.x += 1,
+                    None => {}
+                }
+            }
+        }
+
+        self.local_mut().render.camera = camera;
+        if let Some(direction) = direction {
+            match checked_pos {
+                Some(position) if !collision => client_action.movement(position, direction),
+                _ => client_action.look(direction),
+            }
+        }
+
         let forced_update =
             self.local().time_ms - self.local().last_message > crate::SERVER_TICK_RATE * 15;
         let has_action = client_action.any();
@@ -269,10 +292,6 @@ impl ClientGameState {
             send_msg(ClientMessage::Action(client_action))
         }
 
-        // for client in self.game_state.clients.iter_mut() {
-        //     client.predict_movement(tick_amt);
-        // }
-
         self.render(framebuffer, input, send_msg);
 
         // for object in self.local().world.objects.iter() {
@@ -281,6 +300,11 @@ impl ClientGameState {
         //         let hitbox = hitbox.translate(Position::new(-camera.x, -camera.y));
         //         framebuffer.draw_box(&hitbox, &monos_gfx::Color::new(255, 0, 0))
         //     }
+        //
+        //     let bounds = object
+        //         .bounds()
+        //         .translate(Position::new(-camera.x, -camera.y));
+        //     framebuffer.draw_box(&bounds, &monos_gfx::Color::new(0, 255, 0))
         // }
 
         input.clear();
@@ -312,6 +336,9 @@ impl ClientGameState {
             }
             ServerMessage::UpdateState(updates) => {
                 for (id, action) in updates {
+                    if id == self.client().id() {
+                        continue;
+                    }
                     if let Some(client) = self.world.clients.iter_mut().find(|c| c.id() == id) {
                         client.apply_action(&action);
                     }
@@ -371,22 +398,23 @@ impl ClientGameState {
         // move camera to follow client
         let mut camera = self.local().render.camera;
         let mut client_screen_position = self.client().position - camera;
-        if client_screen_position.x < CAMERA_EDGE - 32 {
-            camera.x = self.client().position.x - CAMERA_EDGE + 32;
-            client_screen_position.x = CAMERA_EDGE - 32;
-        } else if client_screen_position.x > framebuffer.dimensions().width as i64 - CAMERA_EDGE {
+        if client_screen_position.x < CAMERA_EDGE_X - 32 {
+            camera.x = self.client().position.x - CAMERA_EDGE_X + 32;
+            client_screen_position.x = CAMERA_EDGE_X - 32;
+        } else if client_screen_position.x > framebuffer.dimensions().width as i64 - CAMERA_EDGE_X {
             camera.x =
-                self.client().position.x - framebuffer.dimensions().width as i64 + CAMERA_EDGE;
-            client_screen_position.x = framebuffer.dimensions().width as i64 - CAMERA_EDGE;
+                self.client().position.x - framebuffer.dimensions().width as i64 + CAMERA_EDGE_X;
+            client_screen_position.x = framebuffer.dimensions().width as i64 - CAMERA_EDGE_X;
         }
 
-        if client_screen_position.y < CAMERA_EDGE - 32 {
-            camera.y = self.client().position.y - CAMERA_EDGE + 32;
-            client_screen_position.y = CAMERA_EDGE - 32;
-        } else if client_screen_position.y > framebuffer.dimensions().height as i64 - CAMERA_EDGE {
+        if client_screen_position.y < CAMERA_EDGE_Y - 32 {
+            camera.y = self.client().position.y - CAMERA_EDGE_Y + 32;
+            client_screen_position.y = CAMERA_EDGE_Y - 32;
+        } else if client_screen_position.y > framebuffer.dimensions().height as i64 - CAMERA_EDGE_Y
+        {
             camera.y =
-                self.client().position.y - framebuffer.dimensions().height as i64 + CAMERA_EDGE;
-            client_screen_position.y = framebuffer.dimensions().height as i64 - CAMERA_EDGE;
+                self.client().position.y - framebuffer.dimensions().height as i64 + CAMERA_EDGE_Y;
+            client_screen_position.y = framebuffer.dimensions().height as i64 - CAMERA_EDGE_Y;
         }
         self.local_mut().render.camera = camera;
 
@@ -470,7 +498,7 @@ impl ClientGameState {
                     self.world.clients.len() + 1
                 ));
                 ui.label::<font::Glean>("You");
-                for client in self.world.clients.iter() {
+                for client in self.world.clients.iter().skip(1) {
                     let client_tile_position = client.position / 16;
                     ui.label::<font::Glean>(&format!(
                         "{} | X{} / Y{}",
