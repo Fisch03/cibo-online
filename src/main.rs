@@ -16,7 +16,7 @@ fn main() {
     assert!(status.success(), "Failed to build web client");
 
     // copy client files to server
-    let server_asset_dir = Path::new(SERVER_DIR).join("static");
+    let server_asset_dir = Path::new(SERVER_DIR).join("static/game");
     std::fs::remove_dir_all(&server_asset_dir).unwrap_or(()); // remove old files
     std::fs::create_dir_all(&server_asset_dir).unwrap();
     copy_dir(&web_client_dir.join("pkg"), &server_asset_dir);
