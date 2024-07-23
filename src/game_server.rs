@@ -1,3 +1,4 @@
+<<<<<<<< HEAD:src/game_server.rs
 use crate::admin_panel::{log_admin_message, AdminAction, BannedWord};
 use axum::{
     extract::{
@@ -363,9 +364,25 @@ async fn handle_client_inner(
         }
         .in_current_span(),
     );
+========
+mod admin_panel;
+mod db;
+mod game_server;
+
+use tokio::sync::mpsc::channel;
+
+#[tokio::main]
+async fn main() {
+    let subscriber = tracing_subscriber::fmt().with_target(false).finish();
+    tracing::subscriber::set_global_default(subscriber).unwrap();
+
+    let (tx, rx) = channel(16);
+    let admin_panel_task = tokio::spawn(admin_panel::run(tx));
+    let game_server_task = tokio::spawn(game_server::run(rx));
+>>>>>>>> b0fc6b1 (basic working admin panel):server/src/main.rs
 
     tokio::select! {
-        _ = recv_task => (),
-        _ = send_task => ()
+        _ = admin_panel_task => {},
+        _ = game_server_task => {},
     }
 }
