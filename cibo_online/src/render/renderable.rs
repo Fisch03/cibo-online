@@ -9,7 +9,7 @@ use monos_gfx::{Dimension, Image, Position, Rect};
 pub trait Renderable {
     type LocalState;
 
-    fn render(&self, state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext);
+    fn render(&mut self, state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -21,11 +21,11 @@ impl ZOrder {
         ZOrder(z)
     }
 
-    // create a z position for UI elements. this is on on top of everything but ui elements with a higher z position
-    // pub const fn new_ui(z: u8) -> Self {
-    //     let z = u8::MAX - z;
-    //     ZOrder(i64::MAX - z as i64)
-    // }
+    /// create a z position for UI elements. this is on on top of everything but ui elements with a higher z position
+    pub const fn new_ui(z: u8) -> Self {
+        let z = u8::MAX - z;
+        ZOrder(i64::MAX - z as i64)
+    }
 }
 
 /// properties of an object that need to be known in advance.
@@ -36,6 +36,7 @@ pub struct ObjectProperties {
     pub rel_hitbox: Option<Rect>,
     pub rel_bounds: Rect,
     pub interactable: bool,
+    pub override_z: Option<ZOrder>,
 }
 
 /// objects that can be converted into a sprite and has a hitbox.
@@ -43,7 +44,7 @@ pub trait Object
 where
     Self: Renderable<LocalState = ()> + core::fmt::Debug,
 {
-    fn as_sprite(&self) -> Sprite;
+    fn as_sprite(&mut self) -> Sprite;
 
     fn properties(&self) -> &ObjectProperties;
 
@@ -77,9 +78,9 @@ where
 
 /// something that can be rendered and has a z order ("3d" objects).
 pub enum Sprite<'a> {
-    Client(&'a Client, Rc<RefCell<ClientLocal>>),
+    Client(&'a mut Client, Rc<RefCell<ClientLocal>>),
     OwnClient(OwnClient<'a>, Rc<RefCell<OwnClientLocal>>),
-    Object(&'a dyn Object),
+    Object(&'a mut dyn Object),
     Static {
         position: Position,
         image: &'a Image,
@@ -88,14 +89,17 @@ pub enum Sprite<'a> {
 
 impl<'a> Sprite<'a> {
     #[inline(always)]
-    pub const fn z_order(&self) -> ZOrder {
+    pub fn z_order(&self) -> ZOrder {
         match self {
+            Self::Object(object) => object.properties().override_z.unwrap_or(ZOrder::new(
+                object.properties().position.y + object.properties().dimensions.height as i64,
+            )),
             _ => ZOrder::new(self.position().y + self.dimensions().height as i64),
         }
     }
 
     #[inline(always)]
-    pub const fn dimensions(&self) -> Dimension {
+    pub fn dimensions(&self) -> Dimension {
         match self {
             Self::Client(_, _) | Self::OwnClient(_, _) => Dimension::new(32, 32),
             Self::Object(object) => object.properties().dimensions,
@@ -104,7 +108,7 @@ impl<'a> Sprite<'a> {
     }
 
     #[inline(always)]
-    pub const fn position(&self) -> Position {
+    pub fn position(&self) -> Position {
         match self {
             Self::Client(client, _) => client.position,
             Self::OwnClient(client, _) => client.0.position,

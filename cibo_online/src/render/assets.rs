@@ -16,6 +16,7 @@ pub struct Assets {
     pub cibo: CiboAssets,
     pub tiles: TileAssets,
     pub message_board: Image,
+    pub message_board_bg: Image,
 }
 
 #[derive(Debug, Clone)]
@@ -43,6 +44,7 @@ impl Assets {
             cibo: CiboAssets::new(),
             tiles: TileAssets::new(),
             message_board: include_ppm!("msgboard.ppm"),
+            message_board_bg: include_ppm!("msgboard_bg.ppm"),
         }
     }
 }

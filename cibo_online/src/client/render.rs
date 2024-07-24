@@ -44,7 +44,7 @@ pub struct ChatMessage {
 
 impl Renderable for Client {
     type LocalState = ClientLocal;
-    fn render(&self, state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext) {
+    fn render(&mut self, state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext) {
         let screen_position = self.position - camera;
         let anim_frame = ctx.anim_frame();
 
@@ -87,7 +87,7 @@ impl Renderable for Client {
 
 impl Renderable for OwnClient<'_> {
     type LocalState = OwnClientLocal;
-    fn render(&self, state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext) {
+    fn render(&mut self, state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext) {
         let screen_position = self.0.position - camera;
 
         ctx.fb.draw_img(

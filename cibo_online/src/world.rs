@@ -71,7 +71,7 @@ impl WorldLocalState {
 
 impl Renderable for WorldState {
     type LocalState = WorldLocalState;
-    fn render(&self, state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext) {
+    fn render(&mut self, state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext) {
         // draw floor
         let start_tile = camera / 16;
         let fb_tile_size = ctx.fb.dimensions() / 16;
@@ -92,7 +92,7 @@ impl Renderable for WorldState {
 
         let mut sprites: Vec<Sprite> =
             Vec::with_capacity(self.clients.len() + 1 + state.objects.len());
-        sprites.extend(self.clients.iter().map(|client| {
+        sprites.extend(self.clients.iter_mut().map(|client| {
             if client.id() == state.own_id {
                 Sprite::OwnClient(OwnClient(client), state.own_local.clone())
             } else {
@@ -111,7 +111,7 @@ impl Renderable for WorldState {
                 )
             }
         }));
-        state.objects.iter().for_each(|object| {
+        state.objects.iter_mut().for_each(|object| {
             sprites.push(object.as_sprite());
         });
 

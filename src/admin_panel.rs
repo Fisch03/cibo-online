@@ -72,6 +72,7 @@ pub async fn run(action_tx: Sender<AdminAction>) {
         .filter_map(|ip: String| ip.parse().ok())
         .collect();
     {
+        info!("loaded {} banned ips", banned_ips.len());
         for ip in banned_ips {
             action_tx.send(AdminAction::BanIp(ip)).await.unwrap();
         }
@@ -82,6 +83,7 @@ pub async fn run(action_tx: Sender<AdminAction>) {
         .await
         .unwrap();
     {
+        info!("loaded {} banned words", banned_words.len());
         for word in banned_words {
             action_tx.send(AdminAction::BanWord(word)).await.unwrap();
         }

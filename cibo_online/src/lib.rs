@@ -1,6 +1,4 @@
 #![no_std]
-#![feature(effects)]
-#![feature(const_trait_impl)]
 
 extern crate alloc;
 
@@ -9,7 +7,7 @@ use world::{WorldLocalState, WorldState};
 
 mod render;
 use render::{
-    widgets, Assets, Object, ObjectProperties, RectExt, RenderContext, Renderable, Sprite,
+    widgets, Assets, Object, ObjectProperties, RectExt, RenderContext, Renderable, Sprite, ZOrder,
 };
 
 pub mod client;
