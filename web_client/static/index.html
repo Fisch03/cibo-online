@@ -98,9 +98,15 @@
             });
 
             window.addEventListener('wheel', (event) => {
-                
                 const delta = Math.floor(event.deltaY / 50)
                 game.mouse_scroll(delta); 
+            });
+
+            window.addEventListener('mousedown', (event) => {
+                game.mouse_click(true);
+            });
+            window.addEventListener('mouseup', (event) => {
+                game.mouse_click(false);
             });
 
             render();

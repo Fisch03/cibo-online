@@ -232,6 +232,11 @@ impl Game {
         mouse.scroll += scroll as i64;
     }
 
+    pub fn mouse_click(&mut self, down: bool) {
+        let mouse = &mut self.local_state.input.borrow_mut().mouse;
+        mouse.left_button.update(down);
+    }
+
     pub fn update(&mut self, delta_ms: f32) {
         self.framebuffer.clear();
         self.framebuffer.clear_alpha();

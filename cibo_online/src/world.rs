@@ -35,10 +35,13 @@ pub(crate) struct WorldLocalState {
 impl WorldLocalState {
     pub fn new(own_id: ClientId) -> Self {
         use objects::*;
-        let objects = vec![MessageBoard::new(Position::new(
-            assets().message_board.dimensions().width as i64 / 2,
-            -(assets().message_board.dimensions().height as i64),
-        ))];
+        let objects = vec![
+            MessageBoard::new(Position::new(
+                assets().message_board.dimensions().width as i64 / 2,
+                -(assets().message_board.dimensions().height as i64),
+            )),
+            Easel::new(Position::new(100, 0)),
+        ];
 
         WorldLocalState {
             own_id,

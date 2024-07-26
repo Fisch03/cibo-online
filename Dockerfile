@@ -16,7 +16,6 @@ FROM rust AS build-web
 # install tools
 RUN rustup target add wasm32-unknown-unknown
 RUN cargo install wasm-pack
-RUN cargo install sqlx-cli
 
 # compile web client
 COPY . .

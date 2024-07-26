@@ -3,8 +3,9 @@ update 1 is out!
 new things:
 - this very blackboard! it'll be updated with newly added features and changes, so keep an eye out for it!
 - a map! press M to open it and see where the heck you are going...
-- paint stuff! go over to the paint workshop to draw something, share it with other tabemonos and even get it added to the world!
-- a buncha changes in the background that will make adding new stuff quicker from now on :3
+- painting! go over to the atelier to draw something, share it with other tabemonos and even get it added to the world!
+- graffiti! head over to any camera-facing wall and press G to leave your mark! anyone could draw over it though so be careful... and don't be a jerk >:(
+- a buncha changes under the hood that will make adding new stuff quicker from now on :3
 
 enjoy! love u all! <3
 

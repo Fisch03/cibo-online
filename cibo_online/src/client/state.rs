@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 
 const CAMERA_EDGE_X: i64 = 100;
 const CAMERA_EDGE_Y: i64 = 50;
-const INTERACTABLE_FOCUS_SPEED: i64 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientGameState {
