@@ -63,7 +63,7 @@ impl TileAssets {
     pub fn from_coords(&self, x: i64, y: i64) -> &Image {
         // cheap hash function for random-ish tile selection
         let h = x.wrapping_mul(374761393) + y.wrapping_mul(668265263);
-        let h = (h ^ (h >> 13)) * 1274126177;
+        let h = (h ^ (h >> 13)).wrapping_mul(1274126177);
         let h = h ^ (h >> 16);
         match h % 10 {
             0..7 => &self.floor_tiles[0],

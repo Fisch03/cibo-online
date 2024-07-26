@@ -112,8 +112,7 @@ pub async fn run(action_tx: Sender<AdminAction>) {
     let compression = CompressionLayer::new()
         .gzip(true)
         .zstd(true)
-        .br(true)
-        .deflate(true);
+        .br(true);
     let app = app.layer(compression);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();

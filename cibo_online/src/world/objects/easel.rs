@@ -1,7 +1,7 @@
-use crate::{assets, Object, ObjectProperties, RectExt, RenderContext, Renderable, Sprite, ZOrder};
+use crate::{Object, ObjectProperties, RectExt, RenderContext, Renderable, Sprite, ZOrder};
 use alloc::{boxed::Box, vec, vec::Vec};
 use monos_gfx::{
-    font::{self, Font},
+    font,
     input::Key,
     ui::{Direction, MarginMode, UIFrame},
     Color, Dimension, Framebuffer, FramebufferFormat, Position, Rect,
@@ -112,7 +112,7 @@ impl CanvasSize {
     fn small() -> Self {
         Self {
             size: Dimension::new(32, 32),
-            scale: 10,
+            scale: 5,
         }
     }
 }
@@ -131,7 +131,7 @@ impl Canvas {
 
 impl Renderable for Canvas {
     type LocalState = ();
-    fn render(&mut self, _state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext) {
+    fn render(&mut self, _state: &mut Self::LocalState, _camera: Position, ctx: &mut RenderContext) {
         let mut image_fb = Framebuffer::new(
             self.data.as_mut_slice(),
             self.properties.size,
