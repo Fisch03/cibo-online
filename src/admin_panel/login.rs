@@ -11,6 +11,7 @@ use std::{
     sync::{LazyLock, Mutex},
     time::Instant,
 };
+use tracing::{info, warn};
 
 const SESSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60 * 60);
 
@@ -29,6 +30,7 @@ impl SessionId {
     }
 }
 
+#[derive(Debug)]
 pub struct SessionData {
     last_activity: Instant,
     user_id: i64,
@@ -78,8 +80,14 @@ pub async fn auth(mut req: Request, next: middleware::Next) -> Response {
         .iter()
         .filter_map(|cookie| {
             let cookie_str = cookie.to_str().ok()?;
-            cookie::Cookie::parse(cookie_str).ok()
+            Some(
+                cookie_str
+                    .split(';')
+                    .map(|s| cookie::Cookie::parse(s.trim()))
+                    .filter_map(Result::ok),
+            )
         })
+        .flatten()
         .find_map(|cookie| {
             if cookie.name() == "session_id" {
                 Some(SessionId(cookie.value().parse().ok()?))
@@ -91,6 +99,7 @@ pub async fn auth(mut req: Request, next: middleware::Next) -> Response {
             let mut sessions = SESSIONS.lock().unwrap();
             let session = sessions.get_mut(&session_id)?;
             if session.last_activity.elapsed() > SESSION_TIMEOUT {
+                sessions.remove(&session_id);
                 None
             } else {
                 session.last_activity = Instant::now();
@@ -168,7 +177,7 @@ pub async fn login(data: LoginData) -> Result<SessionId, LoginError> {
     let user = match user {
         Some(user) => user,
         None => {
-            let total_users: i32 = sqlx::query_scalar!("SELECT COUNT(*) FROM users")
+            let total_users: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM users")
                 .fetch_one(db)
                 .await?;
 
@@ -198,6 +207,7 @@ pub async fn login(data: LoginData) -> Result<SessionId, LoginError> {
     let password_verifier = argon2.verify_password(data.password.as_bytes(), &password_hash);
     if password_verifier.is_ok() {
         let session_id = SessionId::new();
+        info!("User {:?} logged in", user);
         SESSIONS
             .lock()
             .unwrap()
@@ -205,6 +215,7 @@ pub async fn login(data: LoginData) -> Result<SessionId, LoginError> {
 
         Ok(session_id)
     } else {
+        warn!("Invalid password for user {:?}", user);
         Err(LoginError::InvalidCredentials)
     }
 }

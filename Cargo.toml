@@ -1,12 +1,26 @@
 [package]
-name = "cibo_online-runner"
+name = "cibo_online-server"
 version = "0.1.0"
 edition = "2021"
 
+[dependencies]
+axum = { version = "0.7.5", features = ["ws", "form", "macros"] }
+tower-http = { version = "0.5", features = ["fs", "compression-gzip", "compression-br", "compression-deflate", "compression-zstd"] }
+tokio = { version = "1", features = ["full"] }
+futures = "0.3.30"
+cibo_online = { path = "cibo_online" }
+notify-debouncer-mini = "0.4.1"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+sqlx = { version = "0.8.0", features = ["runtime-tokio", "sqlite"] }
+argon2 = "0.5.3"
+maud = { version = "0.26.0", features = ["axum"] }
+serde = "1.0.204"
+rand = "0.8.5"
+cookie = "0.18.1"
+chrono = "0.4.38"
+
 [workspace]
 resolver = "2"
-members = ["web_client", "server", "cibo_online"]
-
-
-[profile.release.package.web_client]
-opt-level = "s"
+members = ["cibo_online"]
+exclude = ["web_client"]

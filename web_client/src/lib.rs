@@ -190,7 +190,7 @@ impl Game {
         on_message.forget();
 
         let on_error = Closure::<dyn FnMut(_)>::new(move |e: ErrorEvent| {
-            alert("connection to server failed.\nyou might have already joined under this ip or you might be banned.");
+            alert("connection to server failed. please reload the page to try again.\n if this error keeps persisting, you might have already joined under this ip or you might be banned.");
             console_log!("connection error: {:?}", e.error());
             web_sys::window().unwrap().location().reload().unwrap();
         });

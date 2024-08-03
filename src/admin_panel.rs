@@ -9,6 +9,7 @@ use axum::{
     routing::{delete, get, post},
     Extension, Router,
 };
+use chrono::{DateTime, Duration, FixedOffset, Utc};
 use maud::{html, Markup};
 use serde::Deserialize;
 use sqlx::FromRow;
@@ -21,8 +22,31 @@ use tokio::sync::mpsc::Sender;
 use tower_http::{compression::CompressionLayer, services::ServeDir};
 use tracing::{error, info, instrument};
 
-static ADMIN_CHAT_LOG: LazyLock<Mutex<VecDeque<String>>> =
+static ADMIN_CHAT_LOG: LazyLock<Mutex<VecDeque<AdminChatMessage>>> =
     LazyLock::new(|| Mutex::new(VecDeque::new()));
+
+struct AdminChatMessage {
+    pub msg: String,
+    pub sender_name: String,
+    pub sender_ip: IpAddr,
+    pub contains_banned: bool,
+    pub timestamp: DateTime<Utc>,
+}
+
+pub fn log_admin_message(msg: &str, sender_name: &str, sender_ip: IpAddr, contains_banned: bool) {
+    let mut log = ADMIN_CHAT_LOG.lock().unwrap();
+    log.push_back(AdminChatMessage {
+        msg: msg.to_string(),
+        sender_name: sender_name.to_string(),
+        sender_ip,
+        contains_banned,
+        timestamp: Utc::now(),
+    });
+
+    if Utc::now() - log.front().unwrap().timestamp > Duration::days(1) && log.len() > 100 {
+        log.pop_front();
+    }
+}
 
 pub enum AdminAction {
     BanIp(IpAddr),
@@ -66,6 +90,7 @@ pub async fn run(action_tx: Sender<AdminAction>) {
     let app = app
         .route("/", get(main_page))
         .route("/login", post(post_login))
+        .route("/chat_log", get(get_chat_log))
         .route("/stream_mode", get(get_stream_mode).put(put_stream_mode))
         .route("/banned_ips", get(get_banned_ips).post(post_banned_ip))
         .route("/banned_ips/:ip", delete(delete_banned_ip))
@@ -124,6 +149,7 @@ fn page_base(body: Markup) -> Markup {
             body {
                 (body)
                 script src="https://unpkg.com/htmx.org@2.0.1" {}
+                script src="/script.js" {}
             }
         }
     }
@@ -147,8 +173,8 @@ async fn main_page(Extension(auth): Extension<login::AuthState>) -> impl IntoRes
         }
 
         (get_stream_mode(Extension(auth.clone())).await)
-        div id="BanPanel" {
-            div  {
+        div class="panel" {
+            div {
                 h2 { "Banned IPs" }
                 form hx-post="/banned_ips" hx-target="next" hx-swap="beforeend" {
                     input type="text" name="ip" placeholder="IP" required;
@@ -160,11 +186,15 @@ async fn main_page(Extension(auth): Extension<login::AuthState>) -> impl IntoRes
                 h2 { "Banned Words" }
                 form hx-post="/banned_words" hx-target="next" hx-swap="beforeend" {
                     input type="text" name="word" placeholder="Word" required;
-                    input type="checkbox" name="full_ban" id="full_ban" { "Full ban" }
                     button type="submit" { "ban" }
                 }
                 (get_banned_words(Extension(auth.clone())).await)
             }
+        }
+
+        div id="ChatLog" {
+            h2 { "Chat Log" }
+            table hx-get="/chat_log" hx-trigger="load, every 2s" {}
         }
     })
 }
@@ -199,18 +229,63 @@ async fn post_login(Form(data): Form<login::LoginData>) -> impl IntoResponse {
     }
 }
 
+#[derive(Deserialize)]
+struct TimeOffset {
+    offset: i32,
+}
+
+async fn get_chat_log(
+    Extension(auth): Extension<login::AuthState>,
+    Form(TimeOffset { offset }): Form<TimeOffset>,
+) -> Markup {
+    if !auth.is_authenticated() {
+        return page_base(html! {
+            p { "authentication failed" }
+        });
+    }
+
+    let log = ADMIN_CHAT_LOG.lock().unwrap();
+    let log = log.iter().rev();
+
+    let offset = FixedOffset::east_opt(offset).unwrap_or_else(|| FixedOffset::east_opt(0).unwrap());
+
+    html! {
+        table {
+            tr {
+                th { "Time" }
+                th { "Sender" }
+                th { "Message" }
+                th { }
+            }
+            @for msg in log {
+                tr style=(if msg.contains_banned { "background-color: orange" } else { "" }) {
+                    td { (msg.timestamp.with_timezone(&offset).format("%H:%M:%S")) }
+                    td { (msg.sender_name) }
+                    td { (msg.msg) }
+                    td {
+                        form hx-post="/banned_ips" hx-target="#BannedIPs" hx-swap="beforeend" {
+                            input type="text" name="ip" value=(msg.sender_ip) style="display: none";
+                            button type="submit" { "ban" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn ip_table_row(ip: &str) -> Markup {
     html! {
         tr {
             td { (ip) }
-            td { button hx-delete={"/banned_ips/"(ip)} { "delete" } }
+            td { button hx-delete={"/banned_ips/"(ip)} { "x" } }
         }
     }
 }
 
 fn ip_table(rows: Vec<String>) -> Markup {
     html! {
-        table hx-confirm="sure?" hx-target="closest tr" hx-swap="outerHTML" {
+        table id="BannedIPs" hx-confirm="sure?" hx-target="closest tr" hx-swap="outerHTML" {
             tr {
                 th { "IP" }
                 th {  }
@@ -348,19 +423,17 @@ pub struct BannedWord {
 #[derive(Debug, Clone, Deserialize)]
 struct BannedWordForm {
     word: String,
-    full_ban: Option<String>,
 }
 impl From<BannedWordForm> for BannedWord {
     fn from(value: BannedWordForm) -> Self {
         BannedWord {
             word: value.word,
-            full_ban: value.full_ban.is_some(),
+            full_ban: true,
         }
     }
 }
 
 fn word_table_row(word: BannedWord) -> Markup {
-    println!("{:?}", word);
     html! {
         tr {
             td { (word.word) }
@@ -371,7 +444,7 @@ fn word_table_row(word: BannedWord) -> Markup {
                     input type="checkbox" name="full_ban" hx-put={"/banned_words/"(word.word)};
                 }
             }
-            td { button hx-delete={"/banned_words/"(word.word)} { "delete" } }
+            td { button hx-delete={"/banned_words/"(word.word)} { "x" } }
         }
     }
 }

@@ -1,0 +1,48 @@
+table {
+    border-collapse: collapse;
+}
+
+th,
+td {
+    border: 1px solid black;
+    border-right: none;
+}
+
+th,
+td {
+    text-align: center;
+    padding: 2px 5px;
+}
+
+th:last-child,
+td:last-child {
+    border: none;
+    border-left: 1px solid black;
+}
+
+h2 {
+    margin-bottom: 5px;
+}
+
+input {
+    margin-bottom: 5px;
+}
+
+.panel {
+    width: 25%;
+    display: flex;
+    justify-content: space-between;
+}
+
+#ChatLog {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: scroll;
+    padding-right: 10px;
+}
+
+#ChatLog>h2 {
+    margin-top: 5px;
+}

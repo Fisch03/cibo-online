@@ -1,7 +1,4 @@
-use crate::{
-    admin_panel::{AdminAction, BannedWord},
-    db::db,
-};
+use crate::admin_panel::{log_admin_message, AdminAction, BannedWord};
 use axum::{
     extract::{
         connect_info::ConnectInfo,
@@ -203,12 +200,12 @@ async fn handle_client(
     socket: WebSocket,
     client_id: ClientId,
     client_addr: SocketAddr,
-    client_ip: Option<IpAddr>,
+    remote_client_ip: Option<IpAddr>,
 ) {
     let (client_tx, client_rx) = mpsc::channel(10);
-    let display_ip = client_ip.unwrap_or(client_addr.ip());
+    let client_ip = remote_client_ip.unwrap_or(client_addr.ip());
 
-    let span = span!(tracing::Level::INFO, "client", id=client_id.as_u32(), ip = %display_ip, name = tracing::field::Empty);
+    let span = span!(tracing::Level::INFO, "client", id=client_id.as_u32(), ip = %client_ip, name = tracing::field::Empty);
 
     async move {
         info!("connected");
@@ -217,7 +214,7 @@ async fn handle_client(
             .lock()
             .unwrap()
             .new_client(client_id, PerClientState { tx: client_tx });
-        handle_client_inner(client_id, socket, client_rx, client_ip).await;
+        handle_client_inner(client_id, socket, client_rx, remote_client_ip, client_ip).await;
 
         info!("disconnected");
     }
@@ -225,8 +222,8 @@ async fn handle_client(
     .await;
 
     GAME_STATE.lock().unwrap().remove_client(client_id);
-    if let Some(client_ip) = client_ip {
-        CONNECTED_IPS.lock().unwrap().remove(&client_ip);
+    if let Some(remote_client_ip) = remote_client_ip {
+        CONNECTED_IPS.lock().unwrap().remove(&remote_client_ip);
     }
 }
 
@@ -234,17 +231,24 @@ async fn handle_client_inner(
     client_id: ClientId,
     socket: WebSocket,
     mut client_rx: mpsc::Receiver<ServerMessage>,
-    client_ip: Option<IpAddr>,
+    remote_client_ip: Option<IpAddr>,
+    client_ip: IpAddr,
 ) {
     let (mut socket_tx, mut socket_rx) = socket.split();
+    let mut client_name = None;
 
     let mut connected = false;
 
     let recv_task = tokio::spawn(
         async move {
             while let Some(Ok(Message::Binary(msg))) = socket_rx.next().await {
-                if let Some(client_ip) = client_ip {
-                    if CONNECTED_IPS.lock().unwrap().get(&client_ip).is_none() {
+                if let Some(remote_client_ip) = remote_client_ip {
+                    if CONNECTED_IPS
+                        .lock()
+                        .unwrap()
+                        .get(&remote_client_ip)
+                        .is_none()
+                    {
                         warn!("received message from disconnected client");
                         break;
                     }
@@ -272,7 +276,14 @@ async fn handle_client_inner(
 
                         let banned_words = BANNED_WORDS.lock().unwrap();
                         let name_lower = name.to_lowercase();
-                        Span::current().record("name", &name.as_str());
+                        let display_name = if name.is_empty() {
+                            "Anon".to_string()
+                        } else {
+                            name.clone()
+                        };
+                        Span::current().record("name", &display_name);
+                        client_name = Some(display_name);
+
                         info!("fully connected");
                         let stream_mode = STREAM_MODE.load(Ordering::Relaxed);
                         if banned_words.values().any(|word| {
@@ -300,7 +311,7 @@ async fn handle_client_inner(
                         let msg_lower = msg.to_lowercase();
                         let stream_mode = STREAM_MODE.load(Ordering::Relaxed);
 
-                        if banned_words.values().any(|word| {
+                        let contains_banned = banned_words.values().any(|word| {
                             if msg_lower.contains(&word.word) {
                                 // allow light bans outside of stream mode
                                 if !word.full_ban && !stream_mode {
@@ -309,7 +320,15 @@ async fn handle_client_inner(
                                 return true;
                             }
                             false
-                        }) {
+                        });
+
+                        log_admin_message(
+                            &msg,
+                            client_name.as_ref().map_or("UNKNOWN", |name| name.as_str()),
+                            client_ip,
+                            contains_banned,
+                        );
+                        if contains_banned {
                             client_msg = ClientMessage::Chat("*****".to_string());
                             warn!("tried to send banned word");
                         }

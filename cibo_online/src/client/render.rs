@@ -1,4 +1,4 @@
-use super::{chat_widget::ChatWidget, ClientGameState, ClientMessage, ClientLocalState};
+use super::{chat_widget::ChatWidget, ClientGameState, ClientLocalState, ClientMessage};
 use crate::game_state::{Client, ClientId, MoveDirection};
 use alloc::{format, vec::Vec};
 
@@ -96,7 +96,7 @@ impl Assets {
     fn tile_from_coords(&self, x: i64, y: i64) -> &Image {
         // cheap hash function for random-ish tile selection
         let h = x.wrapping_mul(374761393) + y.wrapping_mul(668265263);
-        let h = (h ^ (h >> 13)) * 1274126177;
+        let h = (h ^ (h >> 13)).wrapping_mul(1274126177);
         let h = h ^ (h >> 16);
         match h % 10 {
             0..7 => &self.floor_tiles[0],
@@ -157,7 +157,9 @@ impl ClientGameState {
         input: &mut Input,
         send_msg: &mut dyn FnMut(ClientMessage),
     ) {
-        let local = self.local.get_or_insert_with(|| ClientLocalState::default());
+        let local = self
+            .local
+            .get_or_insert_with(|| ClientLocalState::default());
 
         let walk_frame = local.time_ms as usize / WALK_FRAME_DURATION;
         let type_text = match walk_frame % 3 {
@@ -265,8 +267,7 @@ impl ClientGameState {
 
                     $additional_ui(ui);
 
-                    for chat in 
-                        local
+                    for chat in local
                         .other_chat
                         .iter()
                         .rev()
