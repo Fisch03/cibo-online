@@ -50,7 +50,7 @@ impl Renderable for Client {
 
         ctx.fb.draw_img(
             assets().cibo.get_client_image(self, anim_frame),
-            &screen_position,
+            screen_position,
         );
 
         let ui_rect = Rect::new(
@@ -92,7 +92,7 @@ impl Renderable for OwnClient<'_> {
 
         ctx.fb.draw_img(
             assets().cibo.get_client_image(self.0, ctx.anim_frame()),
-            &screen_position,
+            screen_position,
         );
 
         let ui_rect = Rect::new(

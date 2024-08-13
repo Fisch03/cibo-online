@@ -222,7 +222,7 @@ impl ClientGameState {
         };
         let own_hitbox = checked_pos.map(|pos| {
             Rect::new(
-                Position::new(pos.x + 2, pos.y + 12),
+                Position::new(pos.x + 2, pos.y + 15),
                 Position::new(pos.x + 30, pos.y + 32),
             )
         });
@@ -492,10 +492,7 @@ impl ClientGameState {
             );
             player_list.draw_frame(framebuffer, player_list_rect, input, |ui| {
                 ui.margin(MarginMode::Grow);
-                ui.label::<font::Cozette>(&format!(
-                    "Players Online: {}",
-                    self.world.clients.len() + 1
-                ));
+                ui.label::<font::Cozette>(&format!("Players Online: {}", self.world.clients.len()));
                 ui.label::<font::Glean>("You");
                 for client in self.world.clients.iter().skip(1) {
                     let client_tile_position = client.position / 16;

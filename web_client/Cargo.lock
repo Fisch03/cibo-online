@@ -18,8 +18,10 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "cibo_online"
 version = "0.2.0"
 dependencies = [
+ "mixbox",
  "monos_gfx",
  "postcard",
+ "rand",
  "serde",
 ]
 
@@ -61,17 +63,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "libm"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
+
+[[package]]
 name = "log"
 version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 
 [[package]]
+name = "micromath"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3c8dda44ff03a2f238717214da50f65d5a53b45cd213a7370424ffdb6fae815"
+
+[[package]]
+name = "mixbox"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dc7072c6974f853e367c55d051cdee335ca9116ccc55a1f905de0892a6560c6"
+dependencies = [
+ "libm",
+]
+
+[[package]]
 name = "monos_gfx"
 version = "0.1.0"
-source = "git+https://github.com/Fisch03/monOS.git#56777259bc7d58d97c2a7d1ce26d4bac60ef3a18"
 dependencies = [
  "hashbrown",
+ "micromath",
  "monos_std",
  "pc-keyboard",
  "postcard",
@@ -82,7 +105,6 @@ dependencies = [
 [[package]]
 name = "monos_std"
 version = "0.1.0"
-source = "git+https://github.com/Fisch03/monOS.git#56777259bc7d58d97c2a7d1ce26d4bac60ef3a18"
 
 [[package]]
 name = "once_cell"
@@ -124,6 +146,21 @@ checksum = "0fa76aaf39101c457836aec0ce2316dbdc3ab723cdda1c6bd4e6ad4208acaca7"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "rand"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+dependencies = [
+ "rand_core",
+]
+
+[[package]]
+name = "rand_core"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rustc-hash"

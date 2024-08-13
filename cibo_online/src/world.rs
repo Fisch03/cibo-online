@@ -81,14 +81,15 @@ impl Renderable for WorldState {
 
         if ctx.stream_mode {
             ctx.fb.draw_rect(
-                &Rect::from_dimensions(ctx.fb.dimensions()),
-                &Color::new(0, 255, 0),
+                Rect::from_dimensions(ctx.fb.dimensions()),
+                Color::new(0, 255, 0),
             );
         } else {
             for x in start_tile.x - 1..start_tile.x + fb_tile_size.width as i64 + 2 {
                 for y in start_tile.y - 1..start_tile.y + fb_tile_size.height as i64 + 2 {
                     let position = Position::new(x * 16, y * 16) - camera;
-                    ctx.fb.draw_img(assets().tiles.from_coords(x, y), &position);
+                    ctx.fb
+                        .draw_img(assets().tiles[0].from_coords(x, y), position);
                 }
             }
         }

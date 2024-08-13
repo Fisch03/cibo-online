@@ -232,9 +232,14 @@ impl Game {
         mouse.scroll += scroll as i64;
     }
 
-    pub fn mouse_click(&mut self, down: bool) {
+    pub fn mouse_left(&mut self, down: bool) {
         let mouse = &mut self.local_state.input.borrow_mut().mouse;
         mouse.left_button.update(down);
+    }
+
+    pub fn mouse_right(&mut self, down: bool) {
+        let mouse = &mut self.local_state.input.borrow_mut().mouse;
+        mouse.right_button.update(down);
     }
 
     pub fn update(&mut self, delta_ms: f32) {
@@ -262,7 +267,7 @@ impl Game {
             let fb_rect = Rect::from_dimensions(self.framebuffer.dimensions());
 
             self.framebuffer
-                .draw_rect(&fb_rect, &Color::new(100, 100, 100));
+                .draw_rect(fb_rect, Color::new(100, 100, 100));
 
             let logo_pos = Position::new(
                 (self.framebuffer.dimensions().width as i64
@@ -271,7 +276,7 @@ impl Game {
                 20,
             );
             self.framebuffer
-                .draw_img(&self.local_state.game_logo, &logo_pos);
+                .draw_img(&self.local_state.game_logo, logo_pos);
 
             let mut rect = fb_rect.clone();
             rect.min.y = self.local_state.game_logo.dimensions().height as i64 + 50;

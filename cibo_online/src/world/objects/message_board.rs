@@ -48,7 +48,7 @@ impl Renderable for MessageBoard {
     type LocalState = ();
     fn render(&mut self, _state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext) {
         let screen_pos = self.properties.position - camera;
-        ctx.fb.draw_img(&assets().message_board, &screen_pos);
+        ctx.fb.draw_img(&assets().message_board, screen_pos);
 
         if self.hitbox().unwrap().interactable(ctx.player_pos) {
             if ctx.input.key_pressed(Key::Unicode('e')) {
@@ -80,7 +80,7 @@ impl Renderable for MessageBoard {
         if self.opened {
             ctx.fb.draw_img(
                 &assets().message_board_bg,
-                &Position::new(
+                Position::new(
                     ctx.fb.dimensions().width as i64 / 2
                         - assets().message_board_bg.dimensions().width as i64 / 2,
                     ctx.fb.dimensions().height as i64 / 2

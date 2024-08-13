@@ -82,20 +82,18 @@ impl UIElement for ChatWidget<'_> {
 
         // TODO: horribleness. add line drawing functions
         let inner_rect = drawn_rect.shrink(1);
-        context
-            .fb
-            .draw_rect(&inner_rect, &Color::new(255, 255, 255));
+        context.fb.draw_rect(inner_rect, Color::new(255, 255, 255));
         let stem_rect = Rect::new(
             Position::new(center_x - 2, drawn_rect.max.y - 1),
             Position::new(center_x + 2, drawn_rect.max.y + 1),
         );
-        context.fb.draw_rect(&stem_rect, &Color::new(255, 255, 255));
+        context.fb.draw_rect(stem_rect, Color::new(255, 255, 255));
 
         let upper_line = Rect::new(
             Position::new(drawn_rect.min.x + 1, drawn_rect.min.y),
             Position::new(drawn_rect.max.x - 1, drawn_rect.min.y + 1),
         );
-        context.fb.draw_rect(&upper_line, &Color::new(0, 0, 0));
+        context.fb.draw_rect(upper_line, Color::new(0, 0, 0));
 
         let lower_line_left = Rect::new(
             Position::new(drawn_rect.min.x + 1, drawn_rect.max.y - 1),
@@ -105,39 +103,37 @@ impl UIElement for ChatWidget<'_> {
             Position::new(center_x + 2, drawn_rect.max.y - 1),
             Position::new(drawn_rect.max.x - 1, drawn_rect.max.y),
         );
-        context.fb.draw_rect(&lower_line_left, &Color::new(0, 0, 0));
-        context
-            .fb
-            .draw_rect(&lower_line_right, &Color::new(0, 0, 0));
+        context.fb.draw_rect(lower_line_left, Color::new(0, 0, 0));
+        context.fb.draw_rect(lower_line_right, Color::new(0, 0, 0));
 
         context.fb.draw_pixel(
-            &Position::new(center_x - 2, drawn_rect.max.y),
-            &Color::new(0, 0, 0),
+            Position::new(center_x - 2, drawn_rect.max.y),
+            Color::new(0, 0, 0),
         );
         context.fb.draw_pixel(
-            &Position::new(center_x - 1, drawn_rect.max.y + 1),
-            &Color::new(0, 0, 0),
+            Position::new(center_x - 1, drawn_rect.max.y + 1),
+            Color::new(0, 0, 0),
         );
         context.fb.draw_pixel(
-            &Position::new(center_x, drawn_rect.max.y + 1),
-            &Color::new(0, 0, 0),
+            Position::new(center_x, drawn_rect.max.y + 1),
+            Color::new(0, 0, 0),
         );
         context.fb.draw_pixel(
-            &Position::new(center_x + 1, drawn_rect.max.y),
-            &Color::new(0, 0, 0),
+            Position::new(center_x + 1, drawn_rect.max.y),
+            Color::new(0, 0, 0),
         );
 
         let left_line = Rect::new(
             Position::new(drawn_rect.min.x, drawn_rect.min.y + 1),
             Position::new(drawn_rect.min.x + 1, drawn_rect.max.y - 1),
         );
-        context.fb.draw_rect(&left_line, &Color::new(0, 0, 0));
+        context.fb.draw_rect(left_line, Color::new(0, 0, 0));
 
         let right_line = Rect::new(
             Position::new(drawn_rect.max.x - 1, drawn_rect.min.y + 1),
             Position::new(drawn_rect.max.x, drawn_rect.max.y - 1),
         );
-        context.fb.draw_rect(&right_line, &Color::new(0, 0, 0));
+        context.fb.draw_rect(right_line, Color::new(0, 0, 0));
 
         if state.open {
             let lines_rect = Rect::centered_in(result.rect, line_dimensions);

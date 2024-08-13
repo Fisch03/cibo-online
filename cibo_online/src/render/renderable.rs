@@ -123,7 +123,7 @@ impl<'a> Sprite<'a> {
             Self::OwnClient(client, local) => client.render(&mut local.borrow_mut(), camera, ctx),
             Self::Object(object) => object.render(&mut (), camera, ctx),
             Self::Static { position, image } => {
-                ctx.fb.draw_img(image, &(*position - camera));
+                ctx.fb.draw_img(image, *position - camera);
             }
         }
     }

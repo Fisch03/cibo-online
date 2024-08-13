@@ -36,7 +36,7 @@
     </style>
 </head>
 
-<body>
+<body oncontextmenu="return false;">
     <div id="CanvasWrapper"><canvas id="GameCanvas"></canvas></div>
 
     <script type="module">
@@ -54,7 +54,7 @@
             let canvas_data = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
             function resize() {
-                const scale_x = window.innerWidth / 480; 
+                const scale_x = window.innerWidth / 480;
                 const scale_y = window.innerHeight / 240;
                 scale = Math.max(1, Math.floor(Math.max(scale_x, scale_y)));
 
@@ -76,7 +76,7 @@
             function render() {
                 const now = performance.now();
                 const dt = now - last_time;
-                
+
                 last_time = now;
                 game.update(dt);
 
@@ -92,25 +92,34 @@
 
             window.addEventListener('mousemove', (event) => {
                 const bounds = canvas.getBoundingClientRect();
-                const x = Math.floor((event.clientX - bounds.left) / bounds.width * canvas.width );
-                const y = Math.floor((event.clientY - bounds.top) / bounds.height * canvas.height );
+                const x = Math.floor((event.clientX - bounds.left) / bounds.width * canvas.width);
+                const y = Math.floor((event.clientY - bounds.top) / bounds.height * canvas.height);
                 game.mouse_pos(x, y);
+            });
+
+            window.addEventListener('mousedown', (event) => {
+                switch (event.button) {
+                    case 0: game.mouse_left(true); break;
+                    //case 1: game.mouse_middle(true); break;
+                    case 2: game.mouse_right(true); break;
+                }
+                event.preventDefault();
+            });
+            window.addEventListener('mouseup', (event) => {
+                switch (event.button) {
+                    case 0: game.mouse_left(false); break;
+                    //case 1: game.mouse_middle(false); break;
+                    case 2: game.mouse_right(false); break;
+                }
+                event.preventDefault();
             });
 
             window.addEventListener('wheel', (event) => {
                 const delta = Math.floor(event.deltaY / 50)
-                game.mouse_scroll(delta); 
-            });
-
-            window.addEventListener('mousedown', (event) => {
-                game.mouse_click(true);
-            });
-            window.addEventListener('mouseup', (event) => {
-                game.mouse_click(false);
+                game.mouse_scroll(delta);
             });
 
             render();
-
         }
 
         run();

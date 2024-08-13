@@ -33,5 +33,13 @@ COPY --from=build-web /usr/src/cibo-online/web_client/pkg web_client/pkg
 # compile server
 RUN cargo build --bin cibo_online-server --release
 
+
+FROM debian:bookworm-slim AS runtime
+WORKDIR /cibo-online
+COPY .env .env
+COPY --from=build-server /usr/src/cibo-online/target/release/cibo_online-server cibo_online-server
+COPY --from=build-server /usr/src/cibo-online/static static
+
 EXPOSE 8080
 EXPOSE 8081
+CMD ["./cibo_online-server"]

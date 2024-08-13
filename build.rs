@@ -16,6 +16,7 @@ fn build_client() {
     if !std::env::var("SKIP_CLIENT_BUILD").is_ok() {
         let mut build_wasm = Command::new("wasm-pack");
         build_wasm.arg("build");
+        //build_wasm.arg("--debug");
         build_wasm.arg("--target").arg("web");
         build_wasm.current_dir(web_client_dir);
         let status = build_wasm.status().unwrap();

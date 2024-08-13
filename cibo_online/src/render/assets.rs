@@ -11,17 +11,38 @@ macro_rules! include_ppm {
     };
 }
 
+macro_rules! include_pbm {
+    ($file:expr) => {
+        Image::from_pbm(&SliceReader::new(include_bytes!(concat!(
+            "../../../assets/",
+            $file
+        ))))
+        .expect(concat!("Failed to load ", $file))
+    };
+    () => {};
+}
+
 #[derive(Debug, Clone)]
 pub struct Assets {
     pub cibo: CiboAssets,
-    pub tiles: TileAssets,
+    pub tiles: [TileAssets; 1],
     pub message_board: Image,
     pub message_board_bg: Image,
+    pub easel: Image,
+    pub palette: Image,
+    pub palette_mask: Image,
+    pub smudge_brush: Image,
+    pub paint_tube: Image,
+    pub paint_tube_mask: Image,
+    pub spatula: Image,
 }
 
 #[derive(Debug, Clone)]
 pub struct TileAssets {
-    pub floor_tiles: [Image; 4],
+    pub main_tile: Image,
+    pub secondary_tile: Image,
+    pub alt_tile1: Image,
+    pub alt_tile2: Image,
 }
 
 #[derive(Debug, Clone)]
@@ -42,22 +63,33 @@ impl Assets {
     pub fn new() -> Self {
         Self {
             cibo: CiboAssets::new(),
-            tiles: TileAssets::new(),
+            tiles: [TileAssets::new(
+                include_ppm!("tile_plain.ppm"),
+                include_ppm!("tile_grass.ppm"),
+                include_ppm!("tile_flowers.ppm"),
+                include_ppm!("tile_rocks.ppm"),
+            )],
             message_board: include_ppm!("msgboard.ppm"),
             message_board_bg: include_ppm!("msgboard_bg.ppm"),
+            easel: include_ppm!("easel.ppm"),
+            palette: include_ppm!("palette.ppm"),
+            palette_mask: include_pbm!("palette_mask.pbm"),
+            smudge_brush: include_ppm!("smudge_brush.ppm"),
+            paint_tube: include_ppm!("paint_tube.ppm"),
+            paint_tube_mask: include_pbm!("paint_tube_mask.pbm"),
+            spatula: include_ppm!("spatula.ppm"),
         }
     }
 }
 
 impl TileAssets {
-    fn new() -> Self {
-        let floor_tiles = [
-            include_ppm!("tile_plain.ppm"),
-            include_ppm!("tile_grass.ppm"),
-            include_ppm!("tile_flowers.ppm"),
-            include_ppm!("tile_rocks.ppm"),
-        ];
-        Self { floor_tiles }
+    fn new(main_tile: Image, secondary_tile: Image, alt_tile1: Image, alt_tile2: Image) -> Self {
+        Self {
+            main_tile,
+            secondary_tile,
+            alt_tile1,
+            alt_tile2,
+        }
     }
 
     pub fn from_coords(&self, x: i64, y: i64) -> &Image {
@@ -66,10 +98,10 @@ impl TileAssets {
         let h = (h ^ (h >> 13)).wrapping_mul(1274126177);
         let h = h ^ (h >> 16);
         match h % 10 {
-            0..7 => &self.floor_tiles[0],
-            7..8 => &self.floor_tiles[1],
-            8 => &self.floor_tiles[2],
-            9 => &self.floor_tiles[3],
+            0..7 => &self.main_tile,
+            7..8 => &self.secondary_tile,
+            8 => &self.alt_tile1,
+            9 => &self.alt_tile2,
             _ => unreachable!(),
         }
     }

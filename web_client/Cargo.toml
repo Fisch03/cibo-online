@@ -9,6 +9,9 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = ["console_error_panic_hook"]
 
+[profile.release]
+debug = true
+
 [dependencies]
 console_error_panic_hook = { version = "0.1.7", optional = true }
 monos_gfx = { git = "https://github.com/Fisch03/monOS.git", default-features = false }
@@ -28,3 +31,6 @@ features = [
     "WebSocket",
     "Location"
 ]
+
+[patch.'https://github.com/Fisch03/monOS.git']
+monos_gfx = { path = "../../monOS/monos_gfx" }
