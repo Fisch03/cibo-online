@@ -1,5 +1,5 @@
 mod renderable;
-pub use renderable::{Object, ObjectProperties, Renderable, Sprite, ZOrder};
+pub use renderable::{Renderable, Sprite, ZOrder};
 
 mod assets;
 pub use assets::Assets;

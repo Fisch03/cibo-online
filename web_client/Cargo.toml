@@ -32,5 +32,5 @@ features = [
     "Location"
 ]
 
-[patch.'https://github.com/Fisch03/monOS.git']
-monos_gfx = { path = "../../monOS/monos_gfx" }
+#[patch.'https://github.com/Fisch03/monOS.git']
+#monos_gfx = { path = "../../monOS/monos_gfx" }

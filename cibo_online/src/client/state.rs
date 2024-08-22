@@ -1,7 +1,12 @@
-use crate::{server::ServerMessage, RenderContext, Renderable, WorldLocalState, WorldState};
+use crate::{
+    server::ServerMessage, CollisionInfo, CollisionTester, Object, RenderContext, Renderable,
+    WorldLocalState, WorldState,
+};
 
 use super::{Client, ClientAction, ClientId, ClientMessage, MoveDirection};
 use alloc::{boxed::Box, collections::VecDeque, format, string::String};
+#[allow(unused_imports)]
+use micromath::F32Ext;
 use monos_gfx::{
     input::{Input, Key, KeyState, RawKey},
     text::{font, Origin, TextWrap},
@@ -13,7 +18,7 @@ use serde::{Deserialize, Serialize};
 const CAMERA_EDGE_X: i64 = 100;
 const CAMERA_EDGE_Y: i64 = 50;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ClientGameState {
     pub(crate) own_id: ClientId,
     pub(crate) world: WorldState,
@@ -27,7 +32,7 @@ unsafe impl Send for ClientLocalState {}
 //...the cloning also only happens on the server so this is fine too!
 impl Clone for ClientLocalState {
     fn clone(&self) -> Self {
-        panic!("ClientLocalState cannot be cloned")
+        unreachable!("ClientLocalState cannot be cloned")
     }
 }
 
@@ -201,31 +206,29 @@ impl ClientGameState {
             }
         }
 
-        let checked_pos = match direction {
+        let own_velocity = match direction {
             Some(MoveDirection::None) => {
                 client_action.movement(self.client().position, MoveDirection::None);
-                None
+                (0.0, 0.0)
             }
-            Some(direction) => {
-                let mut position = self.client().position;
-                match direction {
-                    MoveDirection::Up => position.y -= 1 * tick_amt as i64,
-                    MoveDirection::Down => position.y += 1 * tick_amt as i64,
-                    MoveDirection::Left => position.x -= 1 * tick_amt as i64,
-                    MoveDirection::Right => position.x += 1 * tick_amt as i64,
-                    MoveDirection::None => unreachable!(),
-                }
-
-                Some(position)
-            }
-            _ => None,
+            Some(direction) => match direction {
+                MoveDirection::Up => (0.0, -1.0),
+                MoveDirection::Down => (0.0, 1.0),
+                MoveDirection::Left => (-1.0, 0.0),
+                MoveDirection::Right => (1.0, 0.0),
+                MoveDirection::None => unreachable!(),
+            },
+            None => (0.0, 0.0),
         };
-        let own_hitbox = checked_pos.map(|pos| {
-            Rect::new(
-                Position::new(pos.x + 2, pos.y + 15),
-                Position::new(pos.x + 30, pos.y + 32),
-            )
-        });
+        let new_position = Position::new(
+            self.client().position.x + own_velocity.0.ceil() as i64,
+            self.client().position.y + own_velocity.1.ceil() as i64,
+        );
+
+        let own_hitbox = Rect::new(
+            Position::new(new_position.x + 2, new_position.y + 15),
+            Position::new(new_position.x + 30, new_position.y + 32),
+        );
 
         let mut camera = self.local().render.camera;
         let camera_rect = Rect::new(
@@ -236,37 +239,54 @@ impl ClientGameState {
             ),
         );
 
-        let mut collision = false;
-        for object in &self.local().world.objects {
-            // collide with objects
-            if let Some(object_hitbox) = object.hitbox() {
-                match own_hitbox {
-                    Some(ref own_hitbox) if !collision => {
-                        if object_hitbox.intersects(own_hitbox) {
-                            collision = true;
+        let client_pos = self.client().position;
+
+        let collision_info = CollisionInfo::new_dynamic(own_hitbox.center(), own_velocity);
+        let mut cant_move = false;
+        macro_rules! check_collision {
+            ($object_iter: expr) => {{
+                for object in $object_iter {
+                    // collide with objects
+                    if let Some(object_hitbox) = object.hitbox() {
+                        if object_hitbox.intersects(&own_hitbox) {
+                            object.on_collision(collision_info);
+                            if object.collision_info().is_static() {
+                                cant_move = true;
+                            }
                         }
                     }
-                    _ => {}
-                }
-            }
 
-            // if an interactable object only partially visible, nudge the camera to show it
-            if object.interacts_with(self.client().position) {
-                match object.bounds().intersects_edge(&camera_rect) {
-                    Some(Edge::Top) => camera.y -= 1,
-                    Some(Edge::Bottom) => camera.y += 1,
-                    Some(Edge::Left) => camera.x -= 1,
-                    Some(Edge::Right) => camera.x += 1,
-                    None => {}
+                    // if an interactable object only partially visible, nudge the camera to show it
+                    if object.interacts_with(client_pos) {
+                        match object.bounds().intersects_edge(&camera_rect) {
+                            Some(Edge::Top) => camera.y -= 1,
+                            Some(Edge::Bottom) => camera.y += 1,
+                            Some(Edge::Left) => camera.x -= 1,
+                            Some(Edge::Right) => camera.x += 1,
+                            None => {}
+                        }
+                    }
                 }
-            }
+            }};
+        }
+
+        check_collision!(self.local_mut().world.objects.iter_mut());
+
+        if delta_ms < 500 {
+            // only check network objects if the client is not lagging
+            check_collision!(self
+                .world
+                .network_objects
+                .values_mut()
+                .map(|o| o.as_object()));
         }
 
         self.local_mut().render.camera = camera;
         if let Some(direction) = direction {
-            match checked_pos {
-                Some(position) if !collision => client_action.movement(position, direction),
-                _ => client_action.look(direction),
+            if !cant_move {
+                client_action.movement(new_position, direction);
+            } else {
+                client_action.look(direction);
             }
         }
 
@@ -291,8 +311,25 @@ impl ClientGameState {
             send_msg(ClientMessage::Action(client_action))
         }
 
-        self.render(framebuffer, input, send_msg);
+        for (id, network_object) in self.world.network_objects.iter_mut() {
+            if let Ok(Some(data)) = network_object.client_tick() {
+                send_msg(ClientMessage::UpdateObject(*id, data));
+            }
 
+            let mut collision_tester = |object: &mut dyn Object| {
+                let hitbox = object.hitbox()?;
+
+                if hitbox.intersects(&own_hitbox) {
+                    object.on_collision(collision_info);
+                    Some(collision_info)
+                } else {
+                    None
+                }
+            };
+            network_object.tick(delta_ms, CollisionTester::new(&mut collision_tester));
+        }
+
+        self.render(framebuffer, input, send_msg);
         // for object in self.local().world.objects.iter() {
         //     if let Some(hitbox) = object.hitbox() {
         //         let camera = self.local().render.camera;
@@ -370,6 +407,23 @@ impl ClientGameState {
                 local
                     .world
                     .add_chat(client_id, message, local.time_ms + 5000);
+            }
+
+            ServerMessage::SpecialEvent { event, active } => {
+                self.world.set_special_event(event, active)
+            }
+
+            ServerMessage::NewObject(id, object) => {
+                self.world.network_objects.insert(id, object.serialize());
+            }
+            ServerMessage::DeleteObject(id) => {
+                self.world.network_objects.remove(&id);
+            }
+            ServerMessage::UpdateObject(id, data) => {
+                let object = self.world.network_objects.get_mut(&id);
+                if let Some(object) = object {
+                    object.client_message(&data).unwrap();
+                }
             }
         }
     }

@@ -127,4 +127,8 @@ impl Object for MessageBoard {
     fn properties(&self) -> &ObjectProperties {
         &self.properties
     }
+
+    fn set_position(&mut self, position: Position) {
+        self.properties.position = position;
+    }
 }

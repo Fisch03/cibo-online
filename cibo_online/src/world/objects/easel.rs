@@ -91,6 +91,10 @@ impl Object for Easel {
     fn properties(&self) -> &ObjectProperties {
         &self.properties
     }
+
+    fn set_position(&mut self, position: Position) {
+        self.properties.position = position;
+    }
 }
 
 const CANVAS_FG: Color = Color::new(184, 128, 75);

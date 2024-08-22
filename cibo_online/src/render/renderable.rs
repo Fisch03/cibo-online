@@ -1,10 +1,11 @@
 use super::RenderContext;
 use crate::client::{Client, ClientLocal, OwnClient, OwnClientLocal};
-use crate::RectExt;
+use crate::Object;
 
 use alloc::rc::Rc;
 use core::cell::RefCell;
-use monos_gfx::{Dimension, Image, Position, Rect};
+use monos_gfx::{Dimension, Image, Position};
+use serde::{Deserialize, Serialize};
 
 pub trait Renderable {
     type LocalState;
@@ -12,7 +13,7 @@ pub trait Renderable {
     fn render(&mut self, state: &mut Self::LocalState, camera: Position, ctx: &mut RenderContext);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ZOrder(i64);
 
 impl ZOrder {
@@ -25,54 +26,6 @@ impl ZOrder {
     pub const fn new_ui(z: u8) -> Self {
         let z = u8::MAX - z;
         ZOrder(i64::MAX - z as i64)
-    }
-}
-
-/// properties of an object that need to be known in advance.
-#[derive(Debug, Clone)]
-pub struct ObjectProperties {
-    pub position: Position,
-    pub dimensions: Dimension,
-    pub rel_hitbox: Option<Rect>,
-    pub rel_bounds: Rect,
-    pub interactable: bool,
-    pub override_z: Option<ZOrder>,
-}
-
-/// objects that can be converted into a sprite and has a hitbox.
-pub trait Object
-where
-    Self: Renderable<LocalState = ()> + core::fmt::Debug,
-{
-    fn as_sprite(&mut self) -> Sprite;
-
-    fn properties(&self) -> &ObjectProperties;
-
-    fn interacts_with(&self, pos: Position) -> bool {
-        if !self.properties().interactable {
-            return false;
-        }
-
-        self.hitbox()
-            .unwrap_or_else(|| self.bounds())
-            .interactable(pos)
-    }
-
-    /// get the hitbox of this object in world space.
-    #[inline]
-    fn hitbox(&self) -> Option<Rect> {
-        let properties = self.properties();
-        properties
-            .rel_hitbox
-            .map(|hitbox| hitbox.translate(properties.position))
-    }
-
-    /// get the bounds of this object in world space.
-    #[inline]
-    fn bounds(&self) -> Rect {
-        self.properties()
-            .rel_bounds
-            .translate(self.properties().position)
     }
 }
 

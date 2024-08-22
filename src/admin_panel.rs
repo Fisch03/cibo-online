@@ -6,10 +6,11 @@ use axum::{
     extract::{Form, Path},
     http, middleware,
     response::IntoResponse,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Extension, Router,
 };
 use chrono::{DateTime, Duration, FixedOffset, Utc};
+use cibo_online::server::SpecialEvent;
 use maud::{html, Markup};
 use serde::Deserialize;
 use sqlx::FromRow;
@@ -104,15 +105,14 @@ pub async fn run(action_tx: Sender<AdminAction>) {
             "/banned_words/:word",
             delete(delete_banned_word).put(put_banned_word),
         )
+        .route("/special_events", get(get_special_events))
+        .route("/special_events/:event", put(put_special_event))
         .nest_service("/shared", serve_shared_dir)
         .layer(middleware::from_fn(move |req, next| login::auth(req, next)))
         .layer(Extension(action_tx))
         .fallback_service(serve_admin_dir);
 
-    let compression = CompressionLayer::new()
-        .gzip(true)
-        .zstd(true)
-        .br(true);
+    let compression = CompressionLayer::new().gzip(true).zstd(true).br(true);
     let app = app.layer(compression);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();
@@ -161,7 +161,7 @@ async fn main_page(Extension(auth): Extension<login::AuthState>) -> impl IntoRes
         return login_page();
     }
 
-    let _is_admin = auth.user().unwrap().username == "admin";
+    let is_admin = auth.user().unwrap().username == "admin";
 
     page_base(html! {
         h1 { "Admin Dashboard" }
@@ -174,6 +174,9 @@ async fn main_page(Extension(auth): Extension<login::AuthState>) -> impl IntoRes
         }
 
         (get_stream_mode(Extension(auth.clone())).await)
+        @if is_admin {
+            (get_special_events(Extension(auth.clone())).await)
+        }
         div class="panel" {
             div {
                 h2 { "Banned IPs" }
@@ -330,6 +333,63 @@ async fn put_stream_mode(
     }
     game_server::set_stream_mode(stream_mode.is_some());
     get_stream_mode(Extension(auth)).await
+}
+
+#[derive(Deserialize)]
+struct SpecialEventData {
+    active: Option<String>,
+}
+
+async fn get_special_events(Extension(auth): Extension<login::AuthState>) -> Markup {
+    if !auth.is_authenticated() {
+        return page_base(html! {
+            p { "authentication failed" }
+        });
+    }
+
+    let special_events = [(
+        "Beach Episode",
+        game_server::get_special_event(SpecialEvent::BeachEpisode),
+    )];
+
+    html! {
+        table {
+            tr {
+                th { "Event" }
+                th { "Active" }
+            }
+            @for (event, active) in special_events {
+                tr {
+                    td { (event) }
+                    td {
+                        @if active {
+                            input type="checkbox" name="active" hx-put={"/special_events/"(event)} checked;
+                        } @else {
+                            input type="checkbox" name="active" hx-put={"/special_events/"(event)};
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn put_special_event(
+    Path(event): Path<String>,
+    Extension(auth): Extension<login::AuthState>,
+    Form(SpecialEventData { active }): Form<SpecialEventData>,
+) -> Markup {
+    if !auth.is_authenticated() {
+        return html! {"authentication failed"};
+    }
+
+    let event = match event.as_str() {
+        "Beach Episode" => SpecialEvent::BeachEpisode,
+        _ => return html! {"unknown event"},
+    };
+
+    game_server::set_special_event(event, active.is_some());
+    get_special_events(Extension(auth)).await
 }
 
 #[derive(Deserialize)]

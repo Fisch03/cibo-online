@@ -6,6 +6,10 @@ edition = "2021"
 [dependencies]
 mixbox = "2.0.0"
 monos_gfx = { git = "https://github.com/Fisch03/monOS.git", default-features = false }
-postcard = { version = "1.0.8", default-features = false, features = ["alloc"] }
 rand = { version = "0.8.5", default-features = false, features = ["alloc", "small_rng"] }
 serde = { version = "1.0.203", default-features = false, features = ["derive", "alloc"] }
+hashbrown = { version = "0.14.5", default-features = false, features = ["inline-more", "serde"] }
+rustc-hash = { version = "2.0.0", default-features = false }
+postcard = { version = "1.0.8", default-features = false, features = ["alloc"] }
+erased-serde = { version = "0.4.5", default-features = false, features = ["alloc"] }
+micromath = "2.1.0"

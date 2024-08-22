@@ -73,7 +73,12 @@
 
 
             let last_time = performance.now();
+            let frame_timeout = undefined;
             function render() {
+                if (frame_timeout !== undefined) {
+                    clearTimeout(frame_timeout);
+                }
+
                 const now = performance.now();
                 const dt = now - last_time;
 
@@ -87,6 +92,7 @@
                 }
                 canvas_data.data.set(framebuffer);
                 ctx.putImageData(canvas_data, 0, 0);
+                //frame_timeout = setTimeout(render, 1000); // run at at least 1 fps (this is to prevent the browser from freezing the game completely when the tab is not active)
                 requestAnimationFrame(render);
             }
 

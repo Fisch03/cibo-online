@@ -11,7 +11,7 @@ use axum::{
 };
 use cibo_online::{
     client::ClientMessage,
-    server::{ServerGameState, ServerMessage},
+    server::{ServerGameState, ServerMessage, SpecialEvent},
     ClientId,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
@@ -33,7 +33,7 @@ static CONNECTED_IPS: LazyLock<Mutex<HashMap<IpAddr, ClientId>>> =
 static GAME_STATE: LazyLock<Mutex<ServerGameState<PerClientState>>> = LazyLock::new(|| {
     Mutex::new(ServerGameState::new(
         |client_state: &PerClientState, msg| {
-            client_state.tx.try_send(msg).unwrap_or_else(|e| {
+            client_state.tx.send(msg).unwrap_or_else(|e| {
                 error!("sending message to client: {:?}", e);
             });
         },
@@ -41,7 +41,7 @@ static GAME_STATE: LazyLock<Mutex<ServerGameState<PerClientState>>> = LazyLock::
 });
 
 struct PerClientState {
-    tx: mpsc::Sender<ServerMessage>,
+    tx: mpsc::UnboundedSender<ServerMessage>,
 }
 
 static BANNED_IPS: LazyLock<Mutex<HashSet<IpAddr>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
@@ -59,6 +59,18 @@ pub fn set_stream_mode(stream_mode: bool) {
     );
 
     STREAM_MODE.store(stream_mode, Ordering::Relaxed);
+}
+
+pub fn get_special_event(event: SpecialEvent) -> bool {
+    GAME_STATE.lock().unwrap().get_special_event(event)
+}
+pub fn set_special_event(event: SpecialEvent, active: bool) {
+    GAME_STATE.lock().unwrap().set_special_event(event, active);
+    info!(
+        "special event {:?} {}!",
+        event,
+        if active { "enabled" } else { "disabled" }
+    );
 }
 
 #[instrument(name = "game", skip(admin_rx))]
@@ -83,12 +95,16 @@ pub async fn run(mut admin_rx: mpsc::Receiver<AdminAction>) {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
 
     tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(
+            cibo_online::SERVER_TICK_RATE,
+        ));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
-            tokio::time::sleep(std::time::Duration::from_millis(
-                cibo_online::SERVER_TICK_RATE,
-            ))
-            .await;
-            GAME_STATE.lock().unwrap().tick();
+            interval.tick().await;
+            GAME_STATE
+                .lock()
+                .unwrap()
+                .tick(cibo_online::SERVER_TICK_RATE as u64);
         }
     });
 
@@ -119,6 +135,8 @@ pub async fn run(mut admin_rx: mpsc::Receiver<AdminAction>) {
             }
         }
     });
+
+    set_special_event(SpecialEvent::BeachEpisode, true);
 
     info!(
         "ready! listening on port {}",
@@ -202,7 +220,7 @@ async fn handle_client(
     client_addr: SocketAddr,
     remote_client_ip: Option<IpAddr>,
 ) {
-    let (client_tx, client_rx) = mpsc::channel(10);
+    let (client_tx, client_rx) = mpsc::unbounded_channel();
     let client_ip = remote_client_ip.unwrap_or(client_addr.ip());
 
     let span = span!(tracing::Level::INFO, "client", id=client_id.as_u32(), ip = %client_ip, name = tracing::field::Empty);
@@ -230,7 +248,7 @@ async fn handle_client(
 async fn handle_client_inner(
     client_id: ClientId,
     socket: WebSocket,
-    mut client_rx: mpsc::Receiver<ServerMessage>,
+    mut client_rx: mpsc::UnboundedReceiver<ServerMessage>,
     remote_client_ip: Option<IpAddr>,
     client_ip: IpAddr,
 ) {

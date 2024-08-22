@@ -1,5 +1,8 @@
 use crate::client::{Client, MoveDirection};
-use monos_gfx::{image::SliceReader, Image};
+use alloc::{vec, vec::Vec};
+#[allow(unused_imports)]
+use micromath::F32Ext;
+use monos_gfx::{image::SliceReader, Dimension, Image};
 
 macro_rules! include_ppm {
     ($file:expr) => {
@@ -25,9 +28,11 @@ macro_rules! include_pbm {
 #[derive(Debug, Clone)]
 pub struct Assets {
     pub cibo: CiboAssets,
-    pub tiles: [TileAssets; 1],
+    pub tiles: [TileAssets; 2],
+
     pub message_board: Image,
     pub message_board_bg: Image,
+
     pub easel: Image,
     pub palette: Image,
     pub palette_mask: Image,
@@ -35,14 +40,13 @@ pub struct Assets {
     pub paint_tube: Image,
     pub paint_tube_mask: Image,
     pub spatula: Image,
+
+    pub beach_ball: BeachBallAssets,
 }
 
 #[derive(Debug, Clone)]
 pub struct TileAssets {
-    pub main_tile: Image,
-    pub secondary_tile: Image,
-    pub alt_tile1: Image,
-    pub alt_tile2: Image,
+    tiles: Vec<(usize, Image)>,
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +55,18 @@ pub struct CiboAssets {
     back: CiboImage,
     left: CiboImage,
     right: CiboImage,
+}
+
+#[derive(Debug, Clone)]
+pub struct BeachBallAssets {
+    image_0: Image,
+    image_45: Image,
+    image_90: Image,
+    image_135: Image,
+    image_180: Image,
+    image_225: Image,
+    image_270: Image,
+    image_315: Image,
 }
 
 #[derive(Debug, Clone)]
@@ -63,14 +79,25 @@ impl Assets {
     pub fn new() -> Self {
         Self {
             cibo: CiboAssets::new(),
-            tiles: [TileAssets::new(
-                include_ppm!("tile_plain.ppm"),
-                include_ppm!("tile_grass.ppm"),
-                include_ppm!("tile_flowers.ppm"),
-                include_ppm!("tile_rocks.ppm"),
-            )],
+            tiles: [
+                TileAssets::new(vec![
+                    (12, include_ppm!("tile_plain.ppm")),
+                    (3, include_ppm!("tile_grass.ppm")),
+                    (1, include_ppm!("tile_flowers.ppm")),
+                    (1, include_ppm!("tile_rocks.ppm")),
+                ]),
+                TileAssets::new(vec![
+                    (80, include_ppm!("tile_sand.ppm")),
+                    (8, include_ppm!("tile_sand_rocky1.ppm")),
+                    (8, include_ppm!("tile_sand_rocky2.ppm")),
+                    (1, include_ppm!("tile_seashell.ppm")),
+                    (1, include_ppm!("tile_seastar.ppm")),
+                ]),
+            ],
+
             message_board: include_ppm!("msgboard.ppm"),
             message_board_bg: include_ppm!("msgboard_bg.ppm"),
+
             easel: include_ppm!("easel.ppm"),
             palette: include_ppm!("palette.ppm"),
             palette_mask: include_pbm!("palette_mask.pbm"),
@@ -78,17 +105,25 @@ impl Assets {
             paint_tube: include_ppm!("paint_tube.ppm"),
             paint_tube_mask: include_pbm!("paint_tube_mask.pbm"),
             spatula: include_ppm!("spatula.ppm"),
+
+            beach_ball: BeachBallAssets::new(),
         }
     }
 }
 
 impl TileAssets {
-    fn new(main_tile: Image, secondary_tile: Image, alt_tile1: Image, alt_tile2: Image) -> Self {
+    fn new(mut tiles: Vec<(usize, Image)>) -> Self {
+        assert!(!tiles.is_empty());
+
+        let mut weighted_tiles = Vec::with_capacity(tiles.len());
+        let mut threshold = 0;
+        for (weight, tile) in tiles.drain(..) {
+            threshold += weight;
+            weighted_tiles.push((threshold, tile));
+        }
+
         Self {
-            main_tile,
-            secondary_tile,
-            alt_tile1,
-            alt_tile2,
+            tiles: weighted_tiles,
         }
     }
 
@@ -97,13 +132,15 @@ impl TileAssets {
         let h = x.wrapping_mul(374761393) + y.wrapping_mul(668265263);
         let h = (h ^ (h >> 13)).wrapping_mul(1274126177);
         let h = h ^ (h >> 16);
-        match h % 10 {
-            0..7 => &self.main_tile,
-            7..8 => &self.secondary_tile,
-            8 => &self.alt_tile1,
-            9 => &self.alt_tile2,
-            _ => unreachable!(),
+        let h = h as usize % self.tiles.last().unwrap().0;
+
+        for (threshold, tile) in self.tiles.iter() {
+            if h < *threshold {
+                return tile;
+            }
         }
+
+        unreachable!()
     }
 }
 
@@ -145,6 +182,44 @@ impl CiboAssets {
             &self.get_image(client.movement).walk[walk_frame]
         } else {
             &self.get_image(client.look_direction).stand
+        }
+    }
+}
+
+impl BeachBallAssets {
+    fn new() -> Self {
+        Self {
+            image_0: include_ppm!("beach_ball_0.ppm"),
+            image_45: include_ppm!("beach_ball_45.ppm"),
+            image_90: include_ppm!("beach_ball_90.ppm"),
+            image_135: include_ppm!("beach_ball_135.ppm"),
+            image_180: include_ppm!("beach_ball_180.ppm"),
+            image_225: include_ppm!("beach_ball_225.ppm"),
+            image_270: include_ppm!("beach_ball_270.ppm"),
+            image_315: include_ppm!("beach_ball_315.ppm"),
+        }
+    }
+
+    pub fn dimensions(&self) -> Dimension {
+        self.image_0.dimensions()
+    }
+
+    pub fn get_image(&self, angle: f32) -> &Image {
+        const ANGLE_STEP: f32 = 45.0;
+        let angle = angle.rem_euclid(360.0);
+        let angle = (angle / ANGLE_STEP).round() * ANGLE_STEP;
+
+        match angle as u32 {
+            0 => &self.image_0,
+            45 => &self.image_45,
+            90 => &self.image_90,
+            135 => &self.image_135,
+            180 => &self.image_180,
+            225 => &self.image_225,
+            270 => &self.image_270,
+            315 => &self.image_315,
+            360 => &self.image_0,
+            _ => unreachable!(),
         }
     }
 }

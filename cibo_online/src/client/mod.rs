@@ -5,6 +5,8 @@ pub(crate) use render::{OwnClient, OwnClientLocal};
 mod state;
 pub use state::ClientGameState;
 
+use crate::world::ObjectId;
+
 use alloc::{string::String, vec::Vec};
 use core::sync::atomic::{AtomicU32, Ordering};
 use monos_gfx::Position;
@@ -30,6 +32,7 @@ pub enum ClientMessage {
     Connect { name: String },
     Action(ClientAction),
     Chat(String),
+    UpdateObject(ObjectId, Vec<u8>),
 }
 
 impl ClientMessage {
