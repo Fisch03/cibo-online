@@ -175,7 +175,6 @@ impl Game {
                     Ok(ServerMessage::FullState(new_state)) => {
                         cibo_online::setup_network_objects();
                         let new_state = new_state.serialize();
-                        console_log!("{:#?}", new_state);
                         game_state.replace(Some(new_state));
                     }
                     Ok(message) => {

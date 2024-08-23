@@ -87,6 +87,7 @@ impl CollisionTester<'_> {
 pub struct CollisionInfo {
     center: Position,
     velocity: Option<(f32, f32)>,
+    is_player: bool,
 }
 
 impl CollisionInfo {
@@ -94,6 +95,7 @@ impl CollisionInfo {
         CollisionInfo {
             center,
             velocity: Some(velocity),
+            is_player: false,
         }
     }
 
@@ -101,31 +103,76 @@ impl CollisionInfo {
         CollisionInfo {
             center,
             velocity: None,
+            is_player: false,
         }
+    }
+
+    pub(crate) fn new_player(center: Position, velocity: (f32, f32)) -> Self {
+        CollisionInfo {
+            center,
+            velocity: Some(velocity),
+            is_player: true,
+        }
+    }
+
+    pub fn is_player(&self) -> bool {
+        self.is_player
     }
 
     pub fn is_static(&self) -> bool {
         self.velocity.is_none()
     }
 
+    pub fn velocity(&self) -> (f32, f32) {
+        self.velocity.unwrap_or((0.0, 0.0))
+    }
+
     /// apply the collision self with other and return the new velocity.
     pub fn apply(self, other: CollisionInfo) -> (f32, f32) {
-        if self.is_static() {
-            return other.velocity.unwrap_or((0.0, 0.0));
-        }
-
-        let mut velocity = self.velocity.unwrap();
-
         let normal = (
             other.center.x as f32 - self.center.x as f32,
             other.center.y as f32 - self.center.y as f32,
         );
+        let normal_len = (normal.0 * normal.0 + normal.1 * normal.1).sqrt();
+        let normal = (normal.0 / normal_len, normal.1 / normal_len);
 
-        velocity.0 -= normal.0 * 0.03;
-        velocity.1 -= normal.1 * 0.03;
+        self.apply_raw(other, normal, normal_len)
+    }
 
-        velocity.0 = velocity.0.max(-1.0).min(1.0);
-        velocity.1 = velocity.1.max(-1.0).min(1.0);
+    pub fn apply_with_force(self, other: CollisionInfo, force: f32) -> (f32, f32) {
+        let normal = (
+            other.center.x as f32 - self.center.x as f32,
+            other.center.y as f32 - self.center.y as f32,
+        );
+        let normal_len = (normal.0 * normal.0 + normal.1 * normal.1).sqrt();
+        let normal = (normal.0 / normal_len, normal.1 / normal_len);
+
+        let mut velocity = self.apply_raw(other, normal, normal_len);
+        velocity.0 += -normal.0 * force;
+        velocity.1 += -normal.1 * force;
+
+        velocity
+    }
+
+    fn apply_raw(self, other: CollisionInfo, normal: (f32, f32), normal_len: f32) -> (f32, f32) {
+        if self.is_static() {
+            return (0.0, 0.0);
+        }
+
+        let mut velocity = self.velocity.unwrap();
+
+        if other.is_static() {
+            let dot = velocity.0 * normal.0 + velocity.1 * normal.1;
+            velocity.0 -= 2.0 * dot * normal.0;
+            velocity.1 -= 2.0 * dot * normal.1;
+        } else {
+            // TODO: this is not correct but the engine gets unstable otherwise. this only works for beach ball sized objects :P
+            velocity.0 -= normal.0 * (16.0 / normal_len.max(0.1)) * 0.5;
+            velocity.1 -= normal.1 * (16.0 / normal_len.max(0.1)) * 0.5;
+        }
+
+        velocity.0 = velocity.0.clamp(-5.0, 5.0);
+        velocity.1 = velocity.1.clamp(-5.0, 5.0);
 
         velocity
     }

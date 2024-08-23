@@ -44,6 +44,25 @@ impl BeachBall {
             queued_collision: None,
         })
     }
+
+    fn apply_collision(&mut self, collision: CollisionInfo) {
+        self.velocity = if collision.is_player() && collision.velocity() != (0.0, 0.0) {
+            self.collision_info().apply_with_force(collision, 1.2)
+        } else {
+            self.collision_info().apply(collision)
+        };
+
+        /*
+        self.position_f.0 += self.velocity.0;
+        self.position_f.1 += self.velocity.1;
+
+        self.angle +=
+            (self.velocity.0.abs() + self.velocity.1.abs() * 0.5) * self.velocity.0.signum() * 7.5;
+
+        self.properties.position.x = self.position_f.0 as i64;
+        self.properties.position.y = self.position_f.1 as i64;
+        */
+    }
 }
 
 impl Renderable for BeachBall {
@@ -119,7 +138,7 @@ pub struct BeachBallStateMessage {
 impl NetworkObject for BeachBall {
     fn server_message(&mut self, data: &[u8]) -> Result<Option<Vec<u8>>, postcard::Error> {
         let collision: CollisionInfo = postcard::from_bytes(data)?;
-        self.velocity = self.collision_info().apply(collision);
+        self.apply_collision(collision);
 
         Ok(Some(postcard::to_allocvec(&BeachBallStateMessage {
             position: self.position_f,
@@ -139,7 +158,7 @@ impl NetworkObject for BeachBall {
         let mut result = None;
 
         if let Some(collision) = self.queued_collision.take() {
-            self.velocity = self.collision_info().apply(collision);
+            self.apply_collision(collision);
         }
 
         if self.velocity.0.abs() > 0.1 || self.velocity.1.abs() > 0.1 {

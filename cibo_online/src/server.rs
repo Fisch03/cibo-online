@@ -219,10 +219,10 @@ impl<T> ServerGameState<T> {
                 if active {
                     use rand::Rng;
                     let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
-                    for _ in 0..10 {
+                    for _ in 0..500 {
                         self.add_network_object(BeachBall::new(monos_gfx::Position::new(
-                            rng.gen_range(-200..200),
-                            rng.gen_range(0..100),
+                            rng.gen_range(-2000..2000),
+                            rng.gen_range(-1000..1000),
                         )));
                     }
                 } else {

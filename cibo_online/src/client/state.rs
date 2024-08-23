@@ -212,10 +212,10 @@ impl ClientGameState {
                 (0.0, 0.0)
             }
             Some(direction) => match direction {
-                MoveDirection::Up => (0.0, -1.0),
-                MoveDirection::Down => (0.0, 1.0),
-                MoveDirection::Left => (-1.0, 0.0),
-                MoveDirection::Right => (1.0, 0.0),
+                MoveDirection::Up => (0.0, -1.0 * tick_amt as f32),
+                MoveDirection::Down => (0.0, 1.0 * tick_amt as f32),
+                MoveDirection::Left => (-1.0 * tick_amt as f32, 0.0),
+                MoveDirection::Right => (1.0 * tick_amt as f32, 0.0),
                 MoveDirection::None => unreachable!(),
             },
             None => (0.0, 0.0),
@@ -226,7 +226,7 @@ impl ClientGameState {
         );
 
         let own_hitbox = Rect::new(
-            Position::new(new_position.x + 2, new_position.y + 15),
+            Position::new(new_position.x + 2, new_position.y + 5),
             Position::new(new_position.x + 30, new_position.y + 32),
         );
 
@@ -241,7 +241,7 @@ impl ClientGameState {
 
         let client_pos = self.client().position;
 
-        let collision_info = CollisionInfo::new_dynamic(own_hitbox.center(), own_velocity);
+        let collision_info = CollisionInfo::new_player(own_hitbox.center(), own_velocity);
         let mut cant_move = false;
         macro_rules! check_collision {
             ($object_iter: expr) => {{

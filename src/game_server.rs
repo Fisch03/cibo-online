@@ -136,7 +136,7 @@ pub async fn run(mut admin_rx: mpsc::Receiver<AdminAction>) {
         }
     });
 
-    set_special_event(SpecialEvent::BeachEpisode, true);
+    //set_special_event(SpecialEvent::BeachEpisode, true);
 
     info!(
         "ready! listening on port {}",
