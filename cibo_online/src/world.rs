@@ -42,12 +42,16 @@ impl WorldState {
     pub(crate) fn get_special_event(&self, event: SpecialEvent) -> bool {
         match event {
             SpecialEvent::BeachEpisode => self.special_events.beach_episode,
+            SpecialEvent::Christmas => self.special_events.christmas,
         }
     }
     pub fn set_special_event(&mut self, event: SpecialEvent, active: bool) {
         match event {
             SpecialEvent::BeachEpisode => {
                 self.special_events.beach_episode = active;
+            }
+            SpecialEvent::Christmas => {
+                self.special_events.christmas = active;
             }
         }
     }
@@ -56,6 +60,7 @@ impl WorldState {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct SpecialEventState {
     pub(crate) beach_episode: bool,
+    pub(crate) christmas: bool,
 }
 
 #[derive(Debug)]
@@ -67,7 +72,7 @@ pub(crate) struct WorldLocalState {
 }
 
 impl WorldLocalState {
-    pub fn new(own_id: ClientId) -> Self {
+    pub fn new(own_id: ClientId, special_events: SpecialEventState) -> Self {
         //use objects::*;
         let objects = vec![
             /*
@@ -79,12 +84,17 @@ impl WorldLocalState {
             */
         ];
 
-        WorldLocalState {
+        let mut state = WorldLocalState {
             own_id,
             own_local: Rc::new(RefCell::new(OwnClientLocal::default())),
             clients: Vec::new(),
             objects,
-        }
+        };
+
+        state.set_special_event(SpecialEvent::Christmas, special_events.christmas);
+        state.set_special_event(SpecialEvent::BeachEpisode, special_events.beach_episode);
+
+        state
     }
 
     pub fn add_chat(&self, id: ClientId, message: String, expiry: u64) {
@@ -106,6 +116,25 @@ impl WorldLocalState {
             }
         }
     }
+
+    pub fn set_special_event(&mut self, event: SpecialEvent, active: bool) {
+        match event {
+            SpecialEvent::BeachEpisode => {}
+            SpecialEvent::Christmas => {
+                if active {
+                    self.objects
+                        .extend((0..40).map(|_| objects::Snowflake::new()));
+                } else {
+                    self.objects.retain(|object| {
+                        object
+                            .as_any()
+                            .downcast_ref::<objects::Snowflake>()
+                            .is_none()
+                    });
+                }
+            }
+        }
+    }
 }
 
 impl Renderable for WorldState {
@@ -124,7 +153,9 @@ impl Renderable for WorldState {
             for x in start_tile.x - 1..start_tile.x + fb_tile_size.width as i64 + 2 {
                 for y in start_tile.y - 1..start_tile.y + fb_tile_size.height as i64 + 2 {
                     let position = Position::new(x * 16, y * 16) - camera;
-                    let tile = if self.special_events.beach_episode {
+                    let tile = if self.special_events.christmas {
+                        assets().tiles[2].from_coords(x, y)
+                    } else if self.special_events.beach_episode {
                         assets().tiles[1].from_coords(x, y)
                     } else {
                         assets().tiles[0].from_coords(x, y)

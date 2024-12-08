@@ -1,5 +1,6 @@
 use crate::{RectExt, Renderable, Sprite, ZOrder};
 
+use core::any::Any;
 #[allow(unused_imports)]
 use micromath::F32Ext;
 use monos_gfx::{Dimension, Position, Rect};
@@ -65,6 +66,8 @@ where
     }
 
     fn set_position(&mut self, position: Position);
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 pub struct CollisionTester<'a> {

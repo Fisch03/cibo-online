@@ -244,6 +244,7 @@ impl<T> ServerGameState<T> {
                     }
                 }
             }
+            SpecialEvent::Christmas => {}
         }
 
         self.world.set_special_event(event, active);
@@ -328,6 +329,7 @@ impl SerializedNetworkObject {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum SpecialEvent {
     BeachEpisode,
+    Christmas,
 }
 
 impl ServerMessage {

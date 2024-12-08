@@ -7,7 +7,7 @@ pub use assets::Assets;
 pub mod widgets;
 
 use crate::client::ClientMessage;
-use monos_gfx::{Framebuffer, Input, Position, Rect};
+use monos_gfx::{Color, Framebuffer, Input, Position, Rect};
 
 pub struct RenderContext<'a, 'f> {
     pub fb: &'a mut Framebuffer<'f>,
@@ -16,6 +16,7 @@ pub struct RenderContext<'a, 'f> {
     pub time_ms: u64,
     pub stream_mode: bool,
     pub send_msg: &'a mut dyn FnMut(ClientMessage),
+    pub main_font_color: Color,
 }
 
 impl<'a> RenderContext<'a, '_> {

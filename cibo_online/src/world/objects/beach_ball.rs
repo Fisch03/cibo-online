@@ -127,6 +127,10 @@ impl Object for BeachBall {
         self.properties.position.x = self.position_f.0 as i64;
         self.properties.position.y = self.position_f.1 as i64;
     }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

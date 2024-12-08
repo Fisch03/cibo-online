@@ -23,6 +23,13 @@ fn assets() -> &'static Assets {
     unsafe { ASSETS.get_or_insert_with(|| Assets::new()) }
 }
 
+use rand::{rngs::SmallRng, Rng, SeedableRng};
+fn rng<'a>() -> &'a mut impl Rng {
+    // safety: this assumes that the crate is only used in a single-threaded environment
+    static mut RNG: Option<SmallRng> = None;
+    unsafe { RNG.get_or_insert_with(|| SmallRng::seed_from_u64(0)) }
+}
+
 pub fn setup_network_objects() {
     world::objects::setup_network_objects();
 }

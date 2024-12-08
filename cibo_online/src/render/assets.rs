@@ -28,7 +28,7 @@ macro_rules! include_pbm {
 #[derive(Debug, Clone)]
 pub struct Assets {
     pub cibo: CiboAssets,
-    pub tiles: [TileAssets; 2],
+    pub tiles: [TileAssets; 3],
 
     pub message_board: Image,
     pub message_board_bg: Image,
@@ -42,6 +42,7 @@ pub struct Assets {
     pub spatula: Image,
 
     pub beach_ball: BeachBallAssets,
+    pub snowflakes: Vec<Image>,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +94,11 @@ impl Assets {
                     (1, include_ppm!("tile_seashell.ppm")),
                     (1, include_ppm!("tile_seastar.ppm")),
                 ]),
+                TileAssets::new(vec![
+                    (40, include_ppm!("tile_snow.ppm")),
+                    (1, include_ppm!("tile_snow_grass1.ppm")),
+                    (1, include_ppm!("tile_snow_grass2.ppm")),
+                ]),
             ],
 
             message_board: include_ppm!("msgboard.ppm"),
@@ -107,6 +113,13 @@ impl Assets {
             spatula: include_ppm!("spatula.ppm"),
 
             beach_ball: BeachBallAssets::new(),
+            snowflakes: vec![
+                include_ppm!("snowflake1.ppm"),
+                include_ppm!("snowflake2.ppm"),
+                include_ppm!("snowflake3.ppm"),
+                include_ppm!("snowflake4.ppm"),
+                include_ppm!("snowflake5.ppm"),
+            ],
         }
     }
 }

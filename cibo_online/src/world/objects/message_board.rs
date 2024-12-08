@@ -131,4 +131,8 @@ impl Object for MessageBoard {
     fn set_position(&mut self, position: Position) {
         self.properties.position = position;
     }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
 }

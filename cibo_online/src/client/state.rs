@@ -1,6 +1,6 @@
 use crate::{
-    server::ServerMessage, CollisionInfo, CollisionTester, Object, RenderContext, Renderable,
-    WorldLocalState, WorldState,
+    server::ServerMessage, world::SpecialEventState, CollisionInfo, CollisionTester, Object,
+    RenderContext, Renderable, WorldLocalState, WorldState,
 };
 
 use super::{Client, ClientAction, ClientId, ClientMessage, MoveDirection};
@@ -74,7 +74,7 @@ impl Default for RenderState {
 }
 
 impl ClientLocalState {
-    fn new(own_id: ClientId) -> Self {
+    fn new(own_id: ClientId, special_events: SpecialEventState) -> Self {
         ClientLocalState {
             time_ms: 0,
             last_tick: 0,
@@ -82,7 +82,7 @@ impl ClientLocalState {
 
             render: Default::default(),
 
-            world: WorldLocalState::new(own_id),
+            world: WorldLocalState::new(own_id, special_events),
         }
     }
 }
@@ -111,8 +111,12 @@ impl ClientGameState {
     }
 
     fn prepare_local(&mut self) {
-        self.local
-            .get_or_insert_with(|| Box::new(ClientLocalState::new(self.own_id)));
+        self.local.get_or_insert_with(|| {
+            Box::new(ClientLocalState::new(
+                self.own_id,
+                self.world.special_events.clone(),
+            ))
+        });
     }
 
     #[inline(always)]
@@ -410,7 +414,8 @@ impl ClientGameState {
             }
 
             ServerMessage::SpecialEvent { event, active } => {
-                self.world.set_special_event(event, active)
+                self.world.set_special_event(event, active);
+                self.local_mut().world.set_special_event(event, active);
             }
 
             ServerMessage::NewObject(id, object) => {
@@ -471,11 +476,20 @@ impl ClientGameState {
         }
         self.local_mut().render.camera = camera;
 
+        let main_font_color = if self.world.special_events.christmas {
+            monos_gfx::Color::new(0, 0, 0)
+        } else {
+            monos_gfx::Color::new(255, 255, 255)
+        };
+
         {
             let player_pos = self.client().position;
-            let local = self
-                .local
-                .get_or_insert_with(|| Box::new(ClientLocalState::new(self.own_id)));
+            let local = self.local.get_or_insert_with(|| {
+                Box::new(ClientLocalState::new(
+                    self.own_id,
+                    self.world.special_events.clone(),
+                ))
+            });
 
             let mut ctx = RenderContext {
                 fb: framebuffer,
@@ -484,6 +498,7 @@ impl ClientGameState {
                 player_pos,
                 input,
                 send_msg,
+                main_font_color,
             };
 
             self.world.render(&mut local.world, camera, &mut ctx);
@@ -511,6 +526,7 @@ impl ClientGameState {
                             local.render.chat_log.iter().map(|chat| chat.as_str()),
                             Origin::Bottom,
                         )
+                        .text_color(main_font_color)
                         .wrap(TextWrap::Enabled { hyphenate: false })
                         .scroll_y(100),
                     );
@@ -528,14 +544,23 @@ impl ClientGameState {
             coordinate_rect,
             input,
             |ui| {
-                ui.label::<font::Glean>(&format!("X{} / Y{}", tile_position.x, tile_position.y));
+                ui.add(
+                    widgets::Label::<font::Glean, _>::new(&format!(
+                        "X{} / Y{}",
+                        tile_position.x, tile_position.y
+                    ))
+                    .text_color(main_font_color),
+                );
             },
         );
 
         // draw player list
-        let local = self
-            .local
-            .get_or_insert_with(|| Box::new(ClientLocalState::new(self.own_id)));
+        let local = self.local.get_or_insert_with(|| {
+            Box::new(ClientLocalState::new(
+                self.own_id,
+                self.world.special_events.clone(),
+            ))
+        });
         if let Some(player_list) = &mut local.render.player_list_ui {
             let player_list_rect = Rect::new(
                 Position::new(framebuffer.dimensions().width as i64 / 2 - 100, 10),
@@ -546,16 +571,26 @@ impl ClientGameState {
             );
             player_list.draw_frame(framebuffer, player_list_rect, input, |ui| {
                 ui.margin(MarginMode::Grow);
-                ui.label::<font::Cozette>(&format!("Players Online: {}", self.world.clients.len()));
-                ui.label::<font::Glean>("You");
+                ui.add(
+                    widgets::Label::<font::Glean, _>::new(&format!(
+                        "Players Online: {}",
+                        self.world.clients.len()
+                    ))
+                    .text_color(main_font_color),
+                );
+                ui.add(widgets::Label::<font::Glean, _>::new("You").text_color(main_font_color));
                 for client in self.world.clients.iter().skip(1) {
                     let client_tile_position = client.position / 16;
-                    ui.label::<font::Glean>(&format!(
-                        "{} | X{} / Y{}",
-                        client.name(),
-                        client_tile_position.x,
-                        client_tile_position.y
-                    ));
+
+                    ui.add(
+                        widgets::Label::<font::Glean, _>::new(&format!(
+                            "{} | X{} / Y{}",
+                            client.name(),
+                            client_tile_position.x,
+                            client_tile_position.y
+                        ))
+                        .text_color(main_font_color),
+                    );
                 }
             });
         }

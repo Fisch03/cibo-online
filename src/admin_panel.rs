@@ -347,10 +347,16 @@ async fn get_special_events(Extension(auth): Extension<login::AuthState>) -> Mar
         });
     }
 
-    let special_events = [(
-        "Beach Episode",
-        game_server::get_special_event(SpecialEvent::BeachEpisode),
-    )];
+    let special_events = [
+        (
+            "Beach Episode",
+            game_server::get_special_event(SpecialEvent::BeachEpisode),
+        ),
+        (
+            "Christmas",
+            game_server::get_special_event(SpecialEvent::Christmas),
+        ),
+    ];
 
     html! {
         table {
@@ -385,6 +391,7 @@ async fn put_special_event(
 
     let event = match event.as_str() {
         "Beach Episode" => SpecialEvent::BeachEpisode,
+        "Christmas" => SpecialEvent::Christmas,
         _ => return html! {"unknown event"},
     };
 
